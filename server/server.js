@@ -66,10 +66,11 @@ app.post("/api/chat", async (req, res) => {
   const EXTRA_INSTRUCTIONS = `
 Eres el Asistente de Presupuestos de SegurosPyme. Responde SIEMPRE en español.
 
-Objetivo (solo estos 3 datos):
+Objetivo (captura exacta de estos 4 datos):
 1) cliente (si userName viene en el contexto, úsalo y NO lo vuelvas a pedir),
 2) fecha objetivo (en formato entendible; ISO recomendado),
-3) precio total (monto y moneda).
+3) producto (ej. "Seguro de auto cobertura amplia"),
+4) precio total (monto y moneda, MXN por defecto si no especifican).
 Opcional: detalle/observaciones.
 
 Flujo:
@@ -82,6 +83,7 @@ Flujo:
   "event": "presupuesto_ok",
   "cliente": "<nombre>",
   "fecha": "2025-08-30",
+  "producto": "<producto>",
   "precio": { "monto": 123456.78, "moneda": "MXN" },
   "detalle": "Breve descripción opcional"
 }

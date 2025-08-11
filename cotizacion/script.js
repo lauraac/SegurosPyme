@@ -84,6 +84,13 @@ function tryExtractMiniQuote(text) {
         "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
       );
       console.log("MiniQuote:", miniQuote);
+
+      // 🔥 Guardar para el Dashboard
+      try {
+        localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
+      } catch (e) {
+        console.warn("No se pudo guardar lastQuote:", e);
+      }
     }
   } catch (e) {
     console.warn("Bloque JSON inválido:", e);
