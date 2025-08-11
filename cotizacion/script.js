@@ -186,7 +186,7 @@ async function descargarPDFPresupuesto() {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
   // Logo (ajusta la ruta si lo moviste)
-  const logoUrl = `${BASE}./img/pdf.png?v=2`;
+  const logoUrl = `${BASE}img/pdf.png?v=2`;
 
   let logoDataUrl = null;
   try {
