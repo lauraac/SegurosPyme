@@ -137,3 +137,17 @@ html {
     padding: 3rem 3rem;
   }
 }
+
+@media (max-width: 480px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
+}
+
+/* Evita “brincos” cuando aparece el teclado en iOS */
+.container-full-height {
+  min-height: 100dvh; /* en lugar de 100vh */
+}
