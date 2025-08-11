@@ -7,6 +7,17 @@ const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 // ================== Utils ==================
+
+// Dónde vive el frontend (GitHub Pages usa /<repo>/)
+const BASE = location.hostname.endsWith("github.io")
+  ? `/${location.pathname.split("/")[1]}/`
+  : "/";
+
+// Dónde está la API
+const API_URL = location.hostname.endsWith("github.io")
+  ? "https://seguros-pyme-api-bn8n.vercel.app/api/chat" // Vercel (producción)
+  : "/api/chat"; // Localhost con tu server Express
+
 function getParam(n) {
   return new URLSearchParams(location.search).get(n);
 }
@@ -83,25 +94,34 @@ async function sendMessage() {
   input.focus();
 
   try {
-    const res = await fetch("/api/chat", {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userMessage,
         threadId: THREAD_ID,
-        userName: USER_NAME, // 👈 lo leerá el assistant para saludarte/no pedir nombre
+        userName: USER_NAME,
         userCompany: USER_COMPANY,
       }),
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Error desconocido");
+    const ctype = res.headers.get("content-type") || "";
+    const raw = await res.text();
+
+    if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
+    if (!ctype.includes("application/json")) {
+      throw new Error(
+        "La API no devolvió JSON (revisa CORS o la URL de la API)."
+      );
+    }
+
+    const data = JSON.parse(raw);
 
     THREAD_ID = data.threadId;
     localStorage.setItem("threadId", THREAD_ID);
 
     addMessage("Agente Seguros PyME", data.reply);
-    tryExtractMiniQuote(data.reply); // 👈 activa PDF cuando vea el JSON
+    tryExtractMiniQuote(data.reply);
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
@@ -200,7 +220,7 @@ backBtn?.addEventListener("click", (e) => {
   ) {
     history.back();
   } else {
-    const fallback = backBtn.getAttribute("href") || "/";
+    const fallback = backBtn.getAttribute("href") || BASE;
     window.location.href = fallback;
   }
 });
@@ -210,7 +230,7 @@ logoutBtn?.addEventListener("click", () => {
   localStorage.removeItem("userCompany");
   localStorage.removeItem("threadId");
   sessionStorage.clear();
-  window.location.href = "/";
+  window.location.href = BASE;
 });
 
 // ================== Reiniciar conversación (opcional) ==================
