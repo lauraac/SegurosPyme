@@ -92,14 +92,10 @@ function tryExtractMiniQuote(text) {
 
 // Oculta el bloque ```json ...``` al usuario, pero deja que el código lo detecte
 function sanitizeAssistantReply(text) {
-  const hasPresupuestoJson =
-    /```json[\s\S]*"event"\s*:\s*"presupuesto_ok"[\s\S]*```/i.test(text);
-  if (hasPresupuestoJson) {
-    return "✅ Presupuesto confirmado. Ya puedes descargar el PDF.";
-  }
-  // Quita cualquier bloque de código JSON
+  if (!text) return "";
+  // quita cualquier bloque ```...``` (con o sin 'json')
   return String(text)
-    .replace(/```json[\s\S]*?```/g, "")
+    .replace(/```(?:json)?[\s\S]*?```/gi, "")
     .trim();
 }
 
