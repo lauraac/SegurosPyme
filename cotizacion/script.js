@@ -90,6 +90,19 @@ function tryExtractMiniQuote(text) {
   }
 }
 
+// Oculta el bloque ```json ...``` al usuario, pero deja que el código lo detecte
+function sanitizeAssistantReply(text) {
+  const hasPresupuestoJson =
+    /```json[\s\S]*"event"\s*:\s*"presupuesto_ok"[\s\S]*```/i.test(text);
+  if (hasPresupuestoJson) {
+    return "✅ Presupuesto confirmado. Ya puedes descargar el PDF.";
+  }
+  // Quita cualquier bloque de código JSON
+  return String(text)
+    .replace(/```json[\s\S]*?```/g, "")
+    .trim();
+}
+
 // ================== Envío de mensaje ==================
 async function sendMessage() {
   const userMessage = input.value.trim();
@@ -135,8 +148,12 @@ async function sendMessage() {
     THREAD_ID = data.threadId;
     localStorage.setItem("threadId", THREAD_ID);
 
-    addMessage("Agente Seguros PyME", data.reply);
-    tryExtractMiniQuote(data.reply); // ← SOLO una llamada
+    // Pinta el mensaje SIN el JSON
+    const shown = sanitizeAssistantReply(data.reply);
+    addMessage("Agente Seguros PyME", shown);
+
+    // Analiza el texto ORIGINAL para habilitar el PDF
+    tryExtractMiniQuote(data.reply);
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
@@ -169,7 +186,7 @@ async function descargarPDFPresupuesto() {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
   // Logo (ajusta la ruta si lo moviste)
-  const logoUrl = `${BASE}img/pdf.png?v=2`;
+  const logoUrl = `${BASE}./img/pdf.png?v=2`;
 
   let logoDataUrl = null;
   try {
