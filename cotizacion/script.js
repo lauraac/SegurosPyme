@@ -28,9 +28,17 @@ function money(n) {
   });
 }
 function prettyDate(d) {
+  if (!d) return "";
+  // Si viene en formato YYYY-MM-DD, construye fecha local sin TZ
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(y, m - 1, day); // fecha local, sin desfase UTC
+    return dt.toLocaleDateString();
+  }
   const dt = new Date(d);
-  return isNaN(dt) ? String(d || "") : dt.toLocaleDateString();
+  return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
+
 function slug(s) {
   return String(s || "")
     .trim()
@@ -151,7 +159,8 @@ input?.addEventListener("keydown", (e) => {
 });
 
 // ================== PDF ==================
-function descargarPDFPresupuesto() {
+
+async function descargarPDFPresupuesto() {
   if (!miniQuote) {
     alert("Aún no confirmas el presupuesto en el chat.");
     return;
@@ -164,13 +173,24 @@ function descargarPDFPresupuesto() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Header (banda morada)
-  doc.setFillColor(100, 75, 243); // #644bf3
+  // Cambia por la ruta real de tu logo (por ejemplo, en tu repo: ./assets/logo.png)
+  const logoUrl = `${BASE}img/pdf.png`;
+
+  // Convierte a DataURL
+  const logoDataUrl = await urlToDataURL(logoUrl).catch(() => null);
+
+  // Header con banda y logo
+  doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("SegurosPyme • Presupuesto", 40, 55);
+  doc.setFontSize(20);
+  doc.text("SegurosPyme • Presupuesto", 110, 55);
 
   // Contenido
   doc.setTextColor(34, 40, 49);
@@ -178,12 +198,11 @@ function descargarPDFPresupuesto() {
   doc.setFontSize(12);
 
   let y = 130;
-
   putKV("Cliente", miniQuote.cliente || USER_NAME || "—");
   putKV("Fecha objetivo", prettyDate(miniQuote.fecha) || "—");
   if (miniQuote.detalle) putKV("Detalle", miniQuote.detalle);
 
-  // Caja de precio destacada
+  // Caja de precio
   y += 10;
   doc.setDrawColor(100, 75, 243);
   doc.setFillColor(246, 245, 255);
@@ -209,7 +228,7 @@ function descargarPDFPresupuesto() {
     `Presupuesto_${slug(miniQuote.cliente || USER_NAME || "cliente")}.pdf`
   );
 
-  // helpers internos
+  // Helpers
   function putKV(k, v) {
     doc.setFont("helvetica", "normal");
     doc.text(`${k}:`, 40, y);
@@ -218,6 +237,18 @@ function descargarPDFPresupuesto() {
     doc.text(wrap, 140, y);
     y += wrap.length * 14 + 6;
   }
+}
+
+// Convierte URL → DataURL para jsPDF
+async function urlToDataURL(url) {
+  const res = await fetch(url, { mode: "cors" });
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 pdfBtn?.addEventListener("click", descargarPDFPresupuesto);
