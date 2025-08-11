@@ -1,0 +1,16 @@
+# Node / server
+server/node_modules/
+node_modules/
+.env
+.env.*
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# IDE / OS
+.DS_Store
+.vscode/
+dist/
+build/
+.netlify/
+.vercel/

@@ -1,0 +1,239 @@
+:root {
+  /* gradiente azul→morado del fondo */
+  --blue: #644bf3;
+  --purple: #cc69f3;
+  /* naranja↔amarillo del título */
+  --orange: #ffb62e;
+  --orange2: #ff7a00;
+  /* CTA gradient */
+  --cta-a: #ff8a00;
+  --cta-b: #ff5e7e;
+}
+
+* {
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Fondo principal */
+.bg-grad {
+  background: radial-gradient(
+      90rem 60rem at 30% -10%,
+      rgba(184, 11, 11, 0.07),
+      transparent 60%
+    ),
+    linear-gradient(120deg, var(--blue), var(--purple));
+  min-height: 100vh;
+}
+
+.py-6 {
+  padding-block: 5rem;
+}
+
+/* Marca grande */
+.brand-lg {
+  font-size: 3.2rem;
+  font-weight: 800;
+}
+.brand-lg i {
+  font-size: 1.6rem;
+}
+
+/* Hero image “flotando” suave */
+.floaty {
+  animation: floaty 6s ease-in-out infinite;
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Título naranja/amarillo */
+.text-brand {
+  background: linear-gradient(90deg, var(--orange), var(--orange2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Botones con esquinas (no pill) */
+.btn-rect {
+  border-radius: 18px;
+  padding: 0.95rem 1.35rem;
+}
+.btn-white {
+  background: #fff;
+  color: var(--purple);
+  border: 0;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+}
+.btn-white:hover {
+  filter: brightness(1.03);
+  color: var(--purple);
+}
+.btn-cta {
+  background: linear-gradient(90deg, var(--cta-a), var(--cta-b));
+  color: #f4f5f7;
+  border: 0;
+}
+.text-orange {
+  color: var(--orange2) !important;
+}
+
+/* Tarjetas suaves */
+.card-soft {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-soft:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+/* Ícono circular */
+.icon-bubble {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #ff8a00, #ff5e7e);
+  color: #fff;
+  font-size: 1.65rem;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+/* Texto verde de checks */
+.text-lime {
+  color: #6dff6a;
+}
+
+/* CTA bottom gradiente naranja→rosa */
+.cta-grad {
+  background: linear-gradient(90deg, #ff7a00, #ff5e7e);
+}
+
+/* Footer */
+.bg-dark-900 {
+  background: #0f1623;
+}
+
+/* Reveal (IntersectionObserver) */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: all 0.6s ease;
+}
+.reveal.show {
+  opacity: 1;
+  transform: none;
+}
+.reveal.delay-1 {
+  transition-delay: 0.1s;
+}
+.reveal.delay-2 {
+  transition-delay: 0.2s;
+}
+.reveal.delay-3 {
+  transition-delay: 0.3s;
+}
+.reveal.delay-4 {
+  transition-delay: 0.4s;
+}
+
+/* Título grande bien compacto */
+.display-1 {
+  letter-spacing: -0.8px;
+}
+
+.checks {
+  font-size: 1.6rem;
+}
+
+/* Hace que las columnas tengan alturas iguales y la imagen rellene sin deformarse */
+.object-cover {
+  object-fit: cover;
+}
+
+.benefits-figure {
+  /* altura mínima del bloque imagen en desktop */
+  min-height: 560px;
+}
+
+/* Ajustes responsivos para que no quede exagerada en móviles */
+@media (min-width: 1200px) {
+  /* pantallas grandes */
+  .benefits-figure {
+    min-height: 640px;
+  }
+}
+@media (max-width: 991.98px) {
+  /* tablets y abajo (stack en columna) */
+  .benefits-figure {
+    min-height: 320px;
+  }
+}
+
+.hero-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+  border-radius: 24px;
+  padding: 1.5rem; /* margen interno para separar imagen del borde/contenido */
+}
+
+.icon-bubble {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center; /* centra vertical */
+  justify-content: center; /* centra horizontal */
+  background: linear-gradient(135deg, #ff8a00, #ff5e7e);
+  color: #fff;
+  font-size: 1.65rem;
+  margin: 0 auto; /* centra el círculo dentro de la card */
+}
+
+.slice-contrast {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.005) 0%,
+    rgba(255, 255, 255, 0.003) 100%
+  );
+  isolation: isolate;
+}
+
+.slice-contrast::before,
+.slice-contrast::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.slice-contrast::before {
+  top: -1px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0)
+  );
+}
+
+.slice-contrast::after {
+  bottom: -1px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0));
+}

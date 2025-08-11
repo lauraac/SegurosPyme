@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel • SegurosPyme</title>
+
+    <!-- Bootstrap / Icons -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
+
+    <!-- Estilos del dashboard -->
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body class="bg-body">
+    <!-- Topbar -->
+    <header class="topbar border-bottom bg-white">
+      <div
+        class="container-xxl d-flex align-items-center justify-content-between py-3"
+      >
+        <div class="d-flex align-items-center gap-3">
+          <div
+            class="brand-logo d-inline-flex align-items-center justify-content-center rounded-3"
+          >
+            <i class="bi bi-shield-check"></i>
+          </div>
+          <div>
+            <div class="fw-800 fs-4 lh-1">SegurosPyme</div>
+            <small class="text-secondary">Panel de Control</small>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+          <div class="text-end d-none d-md-block">
+            <div class="fw-700" id="topUser">LAURA</div>
+            <small class="text-secondary" id="topCompany">Servifacil</small>
+          </div>
+          <a
+            class="btn btn-outline-secondary btn-sm rounded-3 d-flex align-items-center gap-2"
+            href="../index.html"
+          >
+            <i class="bi bi-box-arrow-right"></i> Salir
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="py-4">
+      <div class="container-xxl">
+        <!-- Welcome / Acciones -->
+        <section class="mb-4 p-4 p-lg-5 rounded-4 soft-surface">
+          <h1 class="display-6 fw-800 mb-2">
+            ¡Bienvenido de vuelta, <span id="welcomeName">LAURA</span>!
+          </h1>
+          <p class="text-secondary mb-4 fs-5">
+            Aquí tienes un resumen de tu actividad reciente y herramientas para
+            gestionar tus seguros para Pymes.
+          </p>
+
+          <div class="d-flex flex-wrap gap-3">
+            <a
+              href="../Cotizacion/index.html"
+              class="btn btn-gradient rounded-3 d-flex align-items-center gap-2 px-4"
+            >
+              <i class="bi bi-plus-lg"></i> Nueva Cotización
+            </a>
+
+            <a
+              href="#"
+              class="btn btn-outline-primary rounded-3 d-flex align-items-center gap-2 px-4"
+            >
+              <i class="bi bi-journal-text"></i> Ver Pólizas
+            </a>
+            <a
+              href="#"
+              class="btn btn-outline-primary rounded-3 d-flex align-items-center gap-2 px-4"
+            >
+              <i class="bi bi-bar-chart-line"></i> Reportes
+            </a>
+          </div>
+        </section>
+
+        <!-- KPIs -->
+        <section class="row g-4 mb-4">
+          <!-- Cotizaciones del mes -->
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="kpi-card rounded-4 p-4 bg-white shadow-sm h-100">
+              <div class="text-secondary mb-2">Cotizaciones del Mes</div>
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="kpi-value">24</div>
+                <div class="kpi-icon kpi-blue">
+                  <i class="bi bi-calculator"></i>
+                </div>
+              </div>
+              <div class="kpi-diff text-success">+12% vs mes anterior</div>
+            </div>
+          </div>
+
+          <!-- Pólizas activas -->
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="kpi-card rounded-4 p-4 bg-white shadow-sm h-100">
+              <div class="text-secondary mb-2">Pólizas Activas</div>
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="kpi-value">156</div>
+                <div class="kpi-icon kpi-green">
+                  <i class="bi bi-shield-fill-check"></i>
+                </div>
+              </div>
+              <div class="kpi-diff text-success">+8% vs mes anterior</div>
+            </div>
+          </div>
+
+          <!-- Clientes Pyme -->
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="kpi-card rounded-4 p-4 bg-white shadow-sm h-100">
+              <div class="text-secondary mb-2">Clientes Pyme</div>
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="kpi-value">89</div>
+                <div class="kpi-icon kpi-purple">
+                  <i class="bi bi-people-fill"></i>
+                </div>
+              </div>
+              <div class="kpi-diff text-success">+15% vs mes anterior</div>
+            </div>
+          </div>
+
+          <!-- Ingresos del mes -->
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="kpi-card rounded-4 p-4 bg-white shadow-sm h-100">
+              <div class="text-secondary mb-2">Ingresos del Mes</div>
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="kpi-value">$45,230</div>
+                <div class="kpi-icon kpi-orange">
+                  <i class="bi bi-graph-up-arrow"></i>
+                </div>
+              </div>
+              <div class="kpi-diff text-success">+22% vs mes anterior</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dos columnas -->
+        <section class="row g-4">
+          <!-- Cotizaciones recientes -->
+          <div class="col-12 col-lg-6">
+            <div class="rounded-4 bg-white shadow-sm p-4 h-100">
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-clock-history text-primary"></i>
+                <h5 class="mb-0 fw-700">Cotizaciones Recientes</h5>
+              </div>
+              <p class="text-secondary mb-4">
+                Tus últimas cotizaciones para clientes Pyme
+              </p>
+
+              <!-- Item -->
+              <div class="list-group list-group-flush">
+                <div class="list-group-item px-0">
+                  <div
+                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
+                  >
+                    <div>
+                      <div class="fw-700">Restaurante El Buen Sabor</div>
+                      <div class="text-secondary small">
+                        Responsabilidad Civil
+                      </div>
+                      <div class="text-secondary small">2024-01-15</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-700">$2,450</div>
+                      <span
+                        class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3"
+                        >Pendiente</span
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="list-group-item px-0">
+                  <div
+                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
+                  >
+                    <div>
+                      <div class="fw-700">Logística Norte</div>
+                      <div class="text-secondary small">Daños a Terceros</div>
+                      <div class="text-secondary small">2024-01-12</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-700">$1,980</div>
+                      <span
+                        class="badge bg-success-subtle text-success-emphasis rounded-pill px-3"
+                        >Aprobada</span
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="list-group-item px-0">
+                  <div
+                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
+                  >
+                    <div>
+                      <div class="fw-700">Consultora Tech Solutions</div>
+                      <div class="text-secondary small">Errores</div>
+                      <div class="text-secondary small">2024-01-13</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-700">$1,800</div>
+                      <span
+                        class="badge bg-success-subtle text-success-emphasis rounded-pill px-3"
+                        >Aprobada</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rendimiento del mes -->
+          <div class="col-12 col-lg-6">
+            <div class="rounded-4 bg-white shadow-sm p-4 h-100">
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bi bi-graph-up text-success"></i>
+                <h5 class="mb-0 fw-700">Rendimiento del Mes</h5>
+              </div>
+              <p class="text-secondary mb-4">
+                Estadísticas de tu desempeño comercial
+              </p>
+
+              <!-- Tasa de conversión -->
+              <div class="mb-4">
+                <div class="d-flex justify-content-between mb-1">
+                  <div class="fw-700">Tasa de Conversión</div>
+                  <small class="text-secondary">68%</small>
+                </div>
+                <div class="progress soft-progress">
+                  <div class="progress-bar bg-success" style="width: 68%"></div>
+                </div>
+              </div>
+
+              <!-- Satisfacción del cliente -->
+              <div class="mb-4">
+                <div class="d-flex justify-content-between mb-1">
+                  <div class="fw-700">Satisfacción del Cliente</div>
+                  <small class="text-secondary">92%</small>
+                </div>
+                <div class="progress soft-progress">
+                  <div class="progress-bar bg-primary" style="width: 92%"></div>
+                </div>
+              </div>
+
+              <!-- Tiempo de respuesta -->
+              <div>
+                <div class="d-flex justify-content-between mb-1">
+                  <div class="fw-700">Tiempo Promedio de Respuesta</div>
+                  <small class="text-secondary">1.8 h</small>
+                </div>
+                <div class="progress soft-progress">
+                  <div class="progress-bar bg-warning" style="width: 70%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      // --- lee name/company de localStorage o querystring ---
+      function getParam(n) {
+        return new URLSearchParams(location.search).get(n);
+      }
+      const nameQS = getParam("name");
+      const compQS = getParam("company");
+
+      const name = nameQS || localStorage.getItem("userName") || "LAURA";
+      const company =
+        compQS || localStorage.getItem("userCompany") || "Servifacil";
+
+      document.getElementById("welcomeName").textContent = name.toUpperCase();
+      document.getElementById("topUser").textContent = name.toUpperCase();
+      document.getElementById("topCompany").textContent = company;
+
+      localStorage.setItem("userName", name);
+      localStorage.setItem("userCompany", company);
+
+      // Ajusta el link "Nueva Cotización" para pasar también por querystring
+      const newQuoteLink = document.querySelector(
+        'a[href*="Cotizacion/index.html"]'
+      );
+      if (newQuoteLink) {
+        newQuoteLink.href = `../Cotizacion/index.html?name=${encodeURIComponent(
+          name
+        )}&company=${encodeURIComponent(company)}`;
+      }
+    </script>
+  </body>
+</html>

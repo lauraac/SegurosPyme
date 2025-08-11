@@ -1,0 +1,128 @@
+:root {
+  --blue: #644bf3;
+  --purple: #cc69f3;
+  --ink: #0f1728;
+  --muted: #6b7280;
+
+  --cta-a: #ff8a00;
+  --cta-b: #ff5e7e;
+
+  --kpi-blue: #388bfd;
+  --kpi-green: #24cc61;
+  --kpi-purple: #a855f7;
+  --kpi-orange: #fb923c;
+}
+
+* {
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, sans-serif;
+}
+.fw-700 {
+  font-weight: 700;
+}
+.fw-800 {
+  font-weight: 800;
+}
+
+.bg-body {
+  background: radial-gradient(
+      120rem 60rem at 50% -20%,
+      rgba(99, 102, 241, 0.06),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #f7f9fc 0%, #eef3f8 60%, #eef3f8 100%);
+}
+
+/* Topbar */
+.topbar .brand-logo {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+/* Soft container under welcome section */
+.soft-surface {
+  background: linear-gradient(180deg, #ffffff, #f9fbff);
+  border: 1px solid rgba(15, 23, 40, 0.08);
+  box-shadow: 0 12px 24px rgba(15, 23, 40, 0.06);
+}
+
+/* Buttons */
+.btn-gradient {
+  background: linear-gradient(90deg, var(--blue), var(--purple));
+  color: #fff;
+  border: 0;
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.25);
+}
+.btn-gradient:hover {
+  filter: brightness(1.03);
+  color: #fff;
+}
+
+.btn-outline-primary {
+  border-color: rgba(15, 23, 40, 0.15);
+  color: var(--ink);
+}
+.btn-outline-primary:hover {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+/* KPI cards */
+.kpi-card {
+  border: 1px solid rgba(15, 23, 40, 0.08);
+}
+.kpi-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.kpi-diff {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+.kpi-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.3rem;
+}
+.kpi-blue {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+}
+.kpi-green {
+  background: linear-gradient(135deg, #5634d3, #16a34a);
+}
+.kpi-purple {
+  background: linear-gradient(135deg, #c084fc, #a855f7);
+}
+.kpi-orange {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+}
+
+/* Progress bars suaves */
+.soft-progress {
+  height: 0.7rem;
+  background: #eef2f7;
+  border-radius: 999px;
+}
+.soft-progress .progress-bar {
+  border-radius: 999px;
+}
+
+/* Helpers */
+.text-secondary {
+  color: #6b7280 !important;
+}
+.shadow-sm {
+  box-shadow: 0 10px 24px rgba(15, 23, 40, 0.08) !important;
+}
+.rounded-4 {
+  border-radius: 1rem;
+}

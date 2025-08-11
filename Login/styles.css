@@ -1,0 +1,135 @@
+:root {
+  /* gradiente azul→morado */
+  --blue: #644bf3;
+  --purple: #cc69f3;
+
+  /* naranja↔amarillo títulos/botones */
+  --orange: #ffb62e;
+  --orange2: #ff7a00;
+
+  /* CTA gradient */
+  --cta-a: #ff8a00;
+  --cta-b: #ff5e7e;
+}
+
+* {
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Fondo principal coherente con la home */
+.bg-grad {
+  background: radial-gradient(
+      90rem 60rem at 30% -10%,
+      rgba(255, 255, 255, 0.07),
+      transparent 60%
+    ),
+    linear-gradient(120deg, var(--blue), var(--purple));
+  min-height: 100vh;
+}
+
+/* Link volver */
+.back-link {
+  color: #fff;
+  opacity: 0.9;
+  text-decoration: none;
+}
+.back-link:hover {
+  opacity: 1;
+}
+
+/* Tarjeta principal con degradé suave y borde */
+.auth-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.06)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+
+/* Burbuja de icono */
+.icon-bubble {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #ff8a00, #ff5e7e);
+  color: #fff;
+  font-size: 1.6rem;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+/* Tipografías grandes como en la landing */
+.auth-title {
+  font-weight: 800;
+  font-size: clamp(1.8rem, 1.2rem + 1.5vw, 2.2rem);
+  color: #fff;
+}
+.auth-subtitle {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: clamp(0.95rem, 0.85rem + 0.4vw, 1.05rem);
+  margin: 0;
+}
+
+/* Inputs “soft” blancos y altos */
+.input-soft .input-group-text {
+  background: #fff;
+  border: 0;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+  color: #888;
+  font-size: 1.15rem;
+  padding: 0.75rem 0.9rem;
+}
+.input-soft .form-control {
+  background: #fff;
+  border: 0;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+  height: 56px;
+  font-size: 1.05rem;
+  color: #222;
+}
+.input-soft .form-control::placeholder {
+  color: #9aa3ad;
+}
+.input-soft .form-control:focus {
+  box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.15);
+  outline: none;
+}
+
+/* Botón CTA con esquinas y gradiente */
+.btn-rect {
+  border-radius: 16px;
+  padding: 0.95rem 1.25rem;
+}
+.btn-cta {
+  background: linear-gradient(90deg, var(--cta-a), var(--cta-b));
+  border: 0;
+  color: #101223;
+  font-weight: 700;
+}
+.btn-cta:hover {
+  filter: brightness(1.03);
+}
+
+/* Enlace CTA inferior */
+.link-cta {
+  color: #ffd199;
+  text-decoration: none;
+}
+.link-cta:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* Espaciado del contenedor de la card para respiración en pantallas grandes */
+@media (min-width: 992px) {
+  .auth-card {
+    padding: 3rem 3rem;
+  }
+}

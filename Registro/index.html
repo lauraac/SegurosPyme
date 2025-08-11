@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Crear cuenta • SegurosPyme</title>
+
+    <!-- Bootstrap -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Iconos Bootstrap -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+    />
+
+    <!-- Estilos de esta pantalla -->
+    <link rel="stylesheet" href="auth.css" />
+  </head>
+
+  <body class="bg-grad">
+    <div class="container py-4 py-md-5">
+      <!-- Volver -->
+      <a
+        href="../index.html"
+        class="back-link d-inline-flex align-items-center mb-3"
+      >
+        <i class="bi bi-arrow-left me-2"></i> Volver al inicio
+      </a>
+
+      <!-- Card -->
+      <div class="row justify-content-center">
+        <div class="col-12 col-lg-10 col-xl-8 col-xxl-7">
+          <div class="auth-card rounded-4 shadow-lg p-4 p-md-5 mx-auto">
+            <!-- Icono -->
+            <div class="text-center mb-3">
+              <div class="icon-bubble mx-auto mb-2">
+                <i class="bi bi-shield-lock"></i>
+              </div>
+              <h1 class="auth-title mb-1">Crear Cuenta</h1>
+              <p class="auth-subtitle">
+                Únete a la plataforma líder en seguros para Pymes
+              </p>
+            </div>
+
+            <form novalidate>
+              <!-- Nombre -->
+              <div class="mb-3">
+                <label class="form-label text-white-50">Nombre Completo</label>
+                <div class="input-group input-soft">
+                  <span class="input-group-text"
+                    ><i class="bi bi-person"></i
+                  ></span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Juan Pérez"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Email -->
+              <div class="mb-3">
+                <label class="form-label text-white-50"
+                  >Correo Electrónico</label
+                >
+                <div class="input-group input-soft">
+                  <span class="input-group-text"
+                    ><i class="bi bi-envelope"></i
+                  ></span>
+                  <input
+                    type="email"
+                    class="form-control"
+                    placeholder="tu@email.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Empresa -->
+              <div class="mb-3">
+                <label class="form-label text-white-50">Empresa</label>
+                <div class="input-group input-soft">
+                  <span class="input-group-text"
+                    ><i class="bi bi-building"></i
+                  ></span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Tu empresa de seguros"
+                  />
+                </div>
+              </div>
+
+              <!-- Contraseña -->
+              <div class="mb-4">
+                <label class="form-label text-white-50">Contraseña</label>
+                <div class="input-group input-soft">
+                  <span class="input-group-text"
+                    ><i class="bi bi-lock"></i
+                  ></span>
+                  <input
+                    type="password"
+                    class="form-control"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- CTA -->
+              <button
+                class="btn btn-rect btn-cta w-100 fw-semibold"
+                type="submit"
+              >
+                Crear Cuenta
+              </button>
+            </form>
+
+            <p class="text-center mt-4 mb-0 text-white-50">
+              ¿Ya tienes cuenta?
+              <a href="../Login/index.html" class="link-cta"
+                >Inicia sesión aquí</a
+              >
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="registro.js"></script>
+  </body>
+</html>
