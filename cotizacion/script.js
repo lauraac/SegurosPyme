@@ -7,7 +7,6 @@ const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 // ================== Utils ==================
-
 // Dónde vive el frontend (GitHub Pages usa /<repo>/)
 const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
@@ -27,18 +26,17 @@ function money(n) {
     maximumFractionDigits: 2,
   });
 }
+// Corrige desfase (YYYY-MM-DD se convierte a fecha local)
 function prettyDate(d) {
   if (!d) return "";
-  // Si viene en formato YYYY-MM-DD, construye fecha local sin TZ
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     const [y, m, day] = d.split("-").map(Number);
-    const dt = new Date(y, m - 1, day); // fecha local, sin desfase UTC
+    const dt = new Date(y, m - 1, day);
     return dt.toLocaleDateString();
   }
   const dt = new Date(d);
   return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
-
 function slug(s) {
   return String(s || "")
     .trim()
@@ -77,7 +75,7 @@ function tryExtractMiniQuote(text) {
   const m = String(text || "").match(/```json([\s\S]*?)```/);
   if (!m) return;
   try {
-    const obj = JSON.parse(m[1]);
+    const obj = JSON.parse(String(m[1]).trim());
     if (obj && obj.event === "presupuesto_ok") {
       miniQuote = obj;
       if (pdfBtn) pdfBtn.disabled = false;
@@ -125,22 +123,20 @@ async function sendMessage() {
 
     const data = JSON.parse(raw);
 
-    // ↙️ si la API aún está procesando, guardamos el thread y reintentamos
+    // Si la API aún procesa, guarda thread y reintenta
     if (data.status === "running") {
       THREAD_ID = data.threadId;
       localStorage.setItem("threadId", THREAD_ID);
-      setTimeout(() => sendMessage(), 1500); // reintenta en 1.5s con el mismo thread
-      return; // no sigas todavía
+      setTimeout(() => sendMessage(), 1500);
+      return;
     }
 
-    // ya terminó: guarda thread y muestra respuesta
+    // Ya terminó
     THREAD_ID = data.threadId;
     localStorage.setItem("threadId", THREAD_ID);
 
     addMessage("Agente Seguros PyME", data.reply);
-    tryExtractMiniQuote(data.reply);
-
-    tryExtractMiniQuote(data.reply);
+    tryExtractMiniQuote(data.reply); // ← SOLO una llamada
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
@@ -159,7 +155,6 @@ input?.addEventListener("keydown", (e) => {
 });
 
 // ================== PDF ==================
-
 async function descargarPDFPresupuesto() {
   if (!miniQuote) {
     alert("Aún no confirmas el presupuesto en el chat.");
@@ -173,18 +168,26 @@ async function descargarPDFPresupuesto() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Cambia por la ruta real de tu logo (por ejemplo, en tu repo: ./assets/logo.png)
-  const logoUrl = `${BASE}img/pdf.png`;
+  // Logo (ajusta la ruta si lo moviste)
+  const logoUrl = `${BASE}img/pdf.png?v=2`;
 
-  // Convierte a DataURL
-  const logoDataUrl = await urlToDataURL(logoUrl).catch(() => null);
+  let logoDataUrl = null;
+  try {
+    logoDataUrl = await urlToDataURL(logoUrl);
+  } catch (e) {
+    console.warn("Logo no disponible:", e.message);
+  }
 
   // Header con banda y logo
   doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
+    try {
+      doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
+    } catch (e) {
+      console.warn("addImage falló, continúo sin logo:", e.message);
+    }
   }
 
   doc.setTextColor(255, 255, 255);
@@ -239,15 +242,18 @@ async function descargarPDFPresupuesto() {
   }
 }
 
-// Convierte URL → DataURL para jsPDF
+// Convierte URL → DataURL para jsPDF (con no-store y validación de tipo)
 async function urlToDataURL(url) {
-  const res = await fetch(url, { mode: "cors" });
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const type = res.headers.get("content-type") || "";
+  if (!type.startsWith("image/")) throw new Error(`No es imagen: ${type}`);
   const blob = await res.blob();
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    const rd = new FileReader();
+    rd.onload = () => resolve(rd.result);
+    rd.onerror = reject;
+    rd.readAsDataURL(blob);
   });
 }
 
@@ -276,7 +282,6 @@ logoutBtn?.addEventListener("click", () => {
 });
 
 // ================== Reiniciar conversación (opcional) ==================
-// Si pones un botón con id="new-quote", habilita esto:
 document.getElementById("new-quote")?.addEventListener("click", () => {
   localStorage.removeItem("threadId");
   location.reload();
