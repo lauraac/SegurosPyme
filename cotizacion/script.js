@@ -117,10 +117,21 @@ async function sendMessage() {
 
     const data = JSON.parse(raw);
 
+    // ↙️ si la API aún está procesando, guardamos el thread y reintentamos
+    if (data.status === "running") {
+      THREAD_ID = data.threadId;
+      localStorage.setItem("threadId", THREAD_ID);
+      setTimeout(() => sendMessage(), 1500); // reintenta en 1.5s con el mismo thread
+      return; // no sigas todavía
+    }
+
+    // ya terminó: guarda thread y muestra respuesta
     THREAD_ID = data.threadId;
     localStorage.setItem("threadId", THREAD_ID);
 
     addMessage("Agente Seguros PyME", data.reply);
+    tryExtractMiniQuote(data.reply);
+
     tryExtractMiniQuote(data.reply);
   } catch (err) {
     console.error(err);
