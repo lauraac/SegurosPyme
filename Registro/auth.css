@@ -1,3 +1,7 @@
+html {
+  font-size: 80%; /* aprox. 14.4px */
+}
+
 :root {
   /* gradiente azul→morado */
   --blue: #644bf3;
@@ -63,6 +67,9 @@
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
 }
 
+.auth-card {
+  font-size: 0.9rem; /* reduce todo el texto interno un 10% */
+}
 /* Tipografías grandes como en la landing */
 .auth-title {
   font-weight: 800;

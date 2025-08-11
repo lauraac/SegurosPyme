@@ -1,3 +1,7 @@
+html {
+  font-size: 80%; /* aprox. 14.4px */
+}
+
 :root {
   /* gradiente azul→morado del fondo */
   --blue: #644bf3;
@@ -164,21 +168,26 @@
 }
 
 .benefits-figure {
-  /* altura mínima del bloque imagen en desktop */
-  min-height: 560px;
+  height: 100%; /* ocupa toda la altura de su contenedor */
+}
+
+.benefits-figure img {
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Ajustes responsivos para que no quede exagerada en móviles */
 @media (min-width: 1200px) {
-  /* pantallas grandes */
   .benefits-figure {
-    min-height: 640px;
+    min-height: auto; /* ya no la obliga a ser gigante */
+    height: auto;
   }
 }
+
 @media (max-width: 991.98px) {
-  /* tablets y abajo (stack en columna) */
   .benefits-figure {
-    min-height: 320px;
+    min-height: auto;
+    height: auto;
   }
 }
 

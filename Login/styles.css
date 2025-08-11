@@ -1,3 +1,7 @@
+html {
+  font-size: 80%; /* aprox. 14.4px */
+}
+
 :root {
   /* gradiente azul→morado */
   --blue: #644bf3;
