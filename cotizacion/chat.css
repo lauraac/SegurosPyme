@@ -8,7 +8,12 @@
 body {
   background: linear-gradient(120deg, var(--blue), var(--purple));
   min-height: 100vh;
+  min-height: 100dvh; /* corrige el alto con teclado en móvil */
+  overflow-x: hidden; /* evita scroll lateral en móvil */
+  /* opcional pero útil en iPhone con notch: */
+  padding-bottom: env(safe-area-inset-bottom);
 }
+
 .brand-logo {
   width: 44px;
   height: 44px;
@@ -30,6 +35,7 @@ body {
 .hero {
   min-height: calc(100vh - 80px);
   padding: 24px 0 48px;
+  min-height: calc(100dvh - 80px); /* alto dinámico en móvil */
 }
 
 .brand-logo {
@@ -124,4 +130,48 @@ body {
 .brand-logo i {
   font-size: 1.25rem;
   line-height: 1;
+}
+
+/* Que la navbar no se rompa en pantallas chicas */
+.navbar .container {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* El card del chat se adapta y el input queda abajo */
+.chat-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* La lista de mensajes crece y scrollea dentro del card */
+.messages {
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: 60vh; /* cómodo en móvil */
+  overflow: auto;
+  padding-right: 2px; /* evita que el scroll tape texto */
+}
+
+/* iOS: evita auto-zoom feo al enfocar */
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+/* En móvil, botones a lo ancho y mensajes más bajos */
+@media (max-width: 576px) {
+  #send-btn,
+  #pdf-btn {
+    width: 100%;
+  }
+  .messages {
+    max-height: 50vh;
+  }
 }
