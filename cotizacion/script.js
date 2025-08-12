@@ -59,11 +59,16 @@ const USER_NAME =
 const USER_COMPANY =
   getParam("company") || localStorage.getItem("userCompany") || "";
 
+// 🔒 Aísla el thread por usuario/empresa
+function threadKey() {
+  return `sp:thread:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+}
+
 localStorage.setItem("userName", USER_NAME);
 localStorage.setItem("userCompany", USER_COMPANY);
 
 // ================== Estado ==================
-let THREAD_ID = localStorage.getItem("threadId") || null;
+let THREAD_ID = localStorage.getItem(threadKey()) || null;
 let miniQuote = null; // aquí se guarda el JSON { event:"presupuesto_ok", ... }
 if (pdfBtn) pdfBtn.disabled = true;
 
@@ -162,14 +167,14 @@ async function sendMessage() {
 
     if (data.status === "running") {
       THREAD_ID = data.threadId;
-      localStorage.setItem("threadId", THREAD_ID);
+      localStorage.setItem(threadKey(), THREAD_ID);
       setTimeout(() => pollThread(THREAD_ID), 1200);
       return;
     }
 
     // Ya terminó
     THREAD_ID = data.threadId;
-    localStorage.setItem("threadId", THREAD_ID);
+    localStorage.setItem(threadKey(), THREAD_ID);
 
     // Pinta el mensaje SIN el JSON
     const shown = sanitizeAssistantReply(data.reply);
@@ -320,7 +325,8 @@ backBtn?.addEventListener("click", (e) => {
 logoutBtn?.addEventListener("click", () => {
   localStorage.removeItem("userName");
   localStorage.removeItem("userCompany");
-  localStorage.removeItem("threadId");
+  localStorage.removeItem(threadKey());
+  localStorage.removeItem("threadId"); // legacy
   sessionStorage.clear();
   window.location.href = BASE;
   try {
@@ -331,7 +337,8 @@ logoutBtn?.addEventListener("click", () => {
 
 // ================== Reiniciar conversación (opcional) ==================
 document.getElementById("new-quote")?.addEventListener("click", () => {
-  localStorage.removeItem("threadId");
+  localStorage.removeItem(threadKey());
+  localStorage.removeItem("threadId"); // legacy
   location.reload();
 });
 
@@ -363,7 +370,7 @@ async function pollThread(tid) {
 
     // Ya terminó → pinta y procesa
     THREAD_ID = data.threadId;
-    localStorage.setItem("threadId", THREAD_ID);
+    localStorage.setItem(threadKey(), THREAD_ID);
 
     const shown = sanitizeAssistantReply(data.reply);
     addMessage("Agente Seguros PyME", shown);
