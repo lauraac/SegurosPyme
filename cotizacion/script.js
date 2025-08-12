@@ -81,30 +81,30 @@ function addMessage(sender, text) {
  * { event: "presupuesto_ok", ... }, habilita el PDF.
  */
 function tryExtractMiniQuote(text) {
-  const m = String(text || "").match(/```json([\s\S]*?)```/);
+  const m = String(text || "").match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (!m) return;
   try {
     const obj = JSON.parse(String(m[1]).trim());
     if (obj && obj.event === "presupuesto_ok") {
       miniQuote = obj;
-      // 👉 guardar historial (últimas 10, por ejemplo)
+
+      // Historial por usuario/empresa (máx 10) + timestamp
+      const KEY = quotesKey(USER_NAME, USER_COMPANY);
+      const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
+
+      let arr = [];
       try {
-        const KEY = quotesKey(USER_NAME, USER_COMPANY);
-        const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
+        arr = JSON.parse(localStorage.getItem(KEY) || "[]");
+      } catch {}
+      arr = [enriched, ...arr].slice(0, 10);
+      localStorage.setItem(KEY, JSON.stringify(arr));
 
-        let arr = [];
-        try {
-          arr = JSON.parse(localStorage.getItem(KEY) || "[]");
-        } catch {}
-        arr = [enriched, ...arr].slice(0, 10); // conserva sólo las 10 más recientes
-
-        localStorage.setItem(KEY, JSON.stringify(arr));
-
-        // compat: sigue guardando la última (por si algo la usa)
-        localStorage.setItem("lastQuote", JSON.stringify(enriched));
-      } catch (e) {
-        console.warn("No se pudo guardar el historial de cotizaciones:", e);
-      }
+      // compat
+      localStorage.setItem("lastQuote", JSON.stringify(enriched));
+      try {
+        const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+        localStorage.setItem(LKEY, JSON.stringify(miniQuote));
+      } catch {}
 
       if (pdfBtn) pdfBtn.disabled = false;
       addMessage(
@@ -112,13 +112,6 @@ function tryExtractMiniQuote(text) {
         "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
       );
       console.log("MiniQuote:", miniQuote);
-      // antes: localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
-      try {
-        const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
-        localStorage.setItem(KEY, JSON.stringify(miniQuote));
-      } catch (e) {
-        console.warn("No se pudo guardar lastQuote:", e);
-      }
     }
   } catch (e) {
     console.warn("Bloque JSON inválido:", e);
@@ -167,11 +160,10 @@ async function sendMessage() {
 
     const data = JSON.parse(raw);
 
-    // Si la API aún procesa, guarda thread y reintenta
     if (data.status === "running") {
       THREAD_ID = data.threadId;
       localStorage.setItem("threadId", THREAD_ID);
-      setTimeout(() => sendMessage(), 1500);
+      setTimeout(() => pollThread(THREAD_ID), 1200);
       return;
     }
 
@@ -342,3 +334,42 @@ document.getElementById("new-quote")?.addEventListener("click", () => {
   localStorage.removeItem("threadId");
   location.reload();
 });
+
+async function pollThread(tid) {
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // TIP: si tu API tolera message: null o ausente, deja null; si no, usa ""
+      body: JSON.stringify({
+        message: null,
+        threadId: tid,
+        userName: USER_NAME,
+        userCompany: USER_COMPANY,
+        poll: true, // si tu backend lo usa; si no, no pasa nada
+      }),
+    });
+
+    const ctype = res.headers.get("content-type") || "";
+    if (!res.ok || !ctype.includes("application/json")) {
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+
+    if (data.status === "running") {
+      setTimeout(() => pollThread(tid), 1200);
+      return;
+    }
+
+    // Ya terminó → pinta y procesa
+    THREAD_ID = data.threadId;
+    localStorage.setItem("threadId", THREAD_ID);
+
+    const shown = sanitizeAssistantReply(data.reply);
+    addMessage("Agente Seguros PyME", shown);
+    tryExtractMiniQuote(data.reply);
+  } catch (e) {
+    console.error(e);
+    addMessage("Sistema", `⚠️ ${e.message}`);
+  }
+}
