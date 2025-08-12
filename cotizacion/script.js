@@ -7,7 +7,6 @@ const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 // ================== Utils ==================
-// 👉 pon esto cerca de tus utils:
 function slug(s) {
   return String(s || "")
     .trim()
@@ -18,20 +17,19 @@ function slug(s) {
 function quotesKey(user, company) {
   return `sp:quotes:${slug(user || "anon")}:${slug(company || "")}`;
 }
-
 function quoteStorageKey(user, company) {
   return `sp:lastQuote:${slug(user || "anon")}:${slug(company || "")}`;
 }
 
-// Dónde vive el frontend (GitHub Pages usa /<repo>/)
+// Frontend base (GitHub Pages)
 const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
   : "/";
 
 // Dónde está la API
 const API_URL = location.hostname.endsWith("github.io")
-  ? "https://seguros-pyme-api-bn8n.vercel.app/api/chat" // Vercel (producción)
-  : "/api/chat"; // Localhost con tu server Express
+  ? "https://seguros-pyme-api-bn8n.vercel.app/api/chat"
+  : "/api/chat";
 
 function getParam(n) {
   return new URLSearchParams(location.search).get(n);
@@ -42,7 +40,6 @@ function money(n) {
     maximumFractionDigits: 2,
   });
 }
-// Corrige desfase (YYYY-MM-DD se convierte a fecha local)
 function prettyDate(d) {
   if (!d) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
@@ -53,23 +50,31 @@ function prettyDate(d) {
   const dt = new Date(d);
   return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
-// ================== Sesión usuario ==================
-const USER_NAME =
-  getParam("name") || localStorage.getItem("userName") || "Cliente";
-const USER_COMPANY =
-  getParam("company") || localStorage.getItem("userCompany") || "";
+
+// ================== Sesión usuario (DINÁMICA) ==================
+const qName = getParam("name");
+const qCompany = getParam("company");
+const USER_NAME = qName ?? localStorage.getItem("userName");
+const USER_COMPANY = qCompany ?? localStorage.getItem("userCompany");
+
+// Si no hay sesión, redirige a login/landing
+if (!USER_NAME || !USER_COMPANY) {
+  window.location.href = "../index.html"; // ajusta la ruta si aplica
+  throw new Error("Sin sesión");
+}
+
+// Persiste si vinieron por QS
+if (qName) localStorage.setItem("userName", USER_NAME);
+if (qCompany) localStorage.setItem("userCompany", USER_COMPANY);
 
 // 🔒 Aísla el thread por usuario/empresa
 function threadKey() {
   return `sp:thread:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
 }
 
-localStorage.setItem("userName", USER_NAME);
-localStorage.setItem("userCompany", USER_COMPANY);
-
 // ================== Estado ==================
 let THREAD_ID = localStorage.getItem(threadKey()) || null;
-let miniQuote = null; // aquí se guarda el JSON { event:"presupuesto_ok", ... }
+let miniQuote = null; // { event:"presupuesto_ok", ... }
 if (pdfBtn) pdfBtn.disabled = true;
 
 // ================== Chat helpers ==================
@@ -82,8 +87,8 @@ function addMessage(sender, text) {
 }
 
 /**
- * Busca un bloque ```json ... ``` en el texto y, si es
- * { event: "presupuesto_ok", ... }, habilita el PDF.
+ * Busca un bloque ```json ... ``` (o ``` ... ```) y, si es
+ * { event: "presupuesto_ok", ... }, habilita el PDF y guarda historial.
  */
 function tryExtractMiniQuote(text) {
   const m = String(text || "").match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -93,7 +98,7 @@ function tryExtractMiniQuote(text) {
     if (obj && obj.event === "presupuesto_ok") {
       miniQuote = obj;
 
-      // Historial por usuario/empresa (máx 10) + timestamp
+      // Guardar historial (por usuario/empresa) máx 10
       const KEY = quotesKey(USER_NAME, USER_COMPANY);
       const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
 
@@ -104,7 +109,7 @@ function tryExtractMiniQuote(text) {
       arr = [enriched, ...arr].slice(0, 10);
       localStorage.setItem(KEY, JSON.stringify(arr));
 
-      // compat
+      // Compat
       localStorage.setItem("lastQuote", JSON.stringify(enriched));
       try {
         const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
@@ -123,10 +128,9 @@ function tryExtractMiniQuote(text) {
   }
 }
 
-// Oculta el bloque ```json ...``` al usuario, pero deja que el código lo detecte
+// Oculta ```...``` al usuario, pero permite detectarlo en background
 function sanitizeAssistantReply(text) {
   if (!text) return "";
-  // quita cualquier bloque ```...``` (con o sin 'json')
   return String(text)
     .replace(/```(?:json)?[\s\S]*?```/gi, "")
     .trim();
@@ -213,9 +217,7 @@ async function descargarPDFPresupuesto() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Logo (ajusta la ruta si lo moviste)
   const logoUrl = `${BASE}img/pdf.png?v=2`;
-
   let logoDataUrl = null;
   try {
     logoDataUrl = await urlToDataURL(logoUrl);
@@ -223,18 +225,16 @@ async function descargarPDFPresupuesto() {
     console.warn("Logo no disponible:", e.message);
   }
 
-  // Header con banda y logo
+  // Header
   doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
-
   if (logoDataUrl) {
     try {
       doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
     } catch (e) {
-      console.warn("addImage falló, continúo sin logo:", e.message);
+      console.warn("addImage falló:", e.message);
     }
   }
-
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
@@ -271,16 +271,14 @@ async function descargarPDFPresupuesto() {
     40,
     770 - 40
   );
-  // Fallback: guarda antes de descargar el PDF
+
   try {
     if (miniQuote) localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
   } catch {}
-
   doc.save(
     `Presupuesto_${slug(miniQuote.cliente || USER_NAME || "cliente")}.pdf`
   );
 
-  // Helpers
   function putKV(k, v) {
     doc.setFont("helvetica", "normal");
     doc.text(`${k}:`, 40, y);
@@ -291,7 +289,7 @@ async function descargarPDFPresupuesto() {
   }
 }
 
-// Convierte URL → DataURL para jsPDF (con no-store y validación de tipo)
+// URL → DataURL para jsPDF
 async function urlToDataURL(url) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -305,7 +303,6 @@ async function urlToDataURL(url) {
     rd.readAsDataURL(blob);
   });
 }
-
 pdfBtn?.addEventListener("click", descargarPDFPresupuesto);
 
 // ================== Navegación ==================
@@ -335,25 +332,25 @@ logoutBtn?.addEventListener("click", () => {
   } catch {}
 });
 
-// ================== Reiniciar conversación (opcional) ==================
+// ================== Reiniciar conversación ==================
 document.getElementById("new-quote")?.addEventListener("click", () => {
   localStorage.removeItem(threadKey());
   localStorage.removeItem("threadId"); // legacy
   location.reload();
 });
 
+// ================== Polling ==================
 async function pollThread(tid) {
   try {
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // TIP: si tu API tolera message: null o ausente, deja null; si no, usa ""
       body: JSON.stringify({
-        message: null,
+        message: null, // o "" si tu backend lo requiere
         threadId: tid,
         userName: USER_NAME,
         userCompany: USER_COMPANY,
-        poll: true, // si tu backend lo usa; si no, no pasa nada
+        poll: true,
       }),
     });
 
