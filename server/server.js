@@ -83,11 +83,11 @@ Flujo:
 \`\`\`json
 {
   "event": "presupuesto_ok",
-  "cliente": "<nombre>",
+  "cliente": "LAURA",
   "fecha": "2025-08-30",
-  "producto": "<producto>",
-  "precio": { "monto": 123456.78, "moneda": "MXN" },
-  "detalle": "Breve descripción opcional"
+  "producto": "Seguro de auto cobertura amplia",
+  "precio": { "monto": 50000, "moneda": "MXN" },
+  "detalle": "Cotización 30 de agosto de 2025 para auto cobertura amplia."
 }
 \`\`\`
 

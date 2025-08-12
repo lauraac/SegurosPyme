@@ -84,8 +84,6 @@ function tryExtractMiniQuote(text) {
         "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
       );
       console.log("MiniQuote:", miniQuote);
-
-      // 🔥 Guardar para el Dashboard
       try {
         localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
       } catch (e) {
@@ -246,6 +244,10 @@ async function descargarPDFPresupuesto() {
     40,
     770 - 40
   );
+  // Fallback: guarda antes de descargar el PDF
+  try {
+    if (miniQuote) localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
+  } catch {}
 
   doc.save(
     `Presupuesto_${slug(miniQuote.cliente || USER_NAME || "cliente")}.pdf`

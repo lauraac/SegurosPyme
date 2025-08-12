@@ -280,6 +280,91 @@
       } else {
         quotesEmpty.classList.remove("d-none");
       }
+
+      (function renderQuotes() {
+        const raw = localStorage.getItem("lastQuote");
+        const list = document.getElementById("quotes-list");
+        const empty = document.getElementById("quotes-empty");
+        const box = document.getElementById("last-quote");
+        const body = document.getElementById("last-quote-body");
+        if (!list || !empty || !box || !body) return;
+
+        if (!raw) {
+          // Cuenta nueva: limpio
+          empty.classList.remove("d-none");
+          box.classList.add("d-none");
+          list.innerHTML = "";
+          return;
+        }
+
+        let q;
+        try {
+          q = JSON.parse(raw);
+        } catch {
+          empty.classList.remove("d-none");
+          box.classList.add("d-none");
+          return;
+        }
+
+        // Hay cotización: ocultar vacío y mostrar datos
+        empty.classList.add("d-none");
+        box.classList.remove("d-none");
+
+        // Formato de fecha sencillo
+        const fechaBonita = ((d) => {
+          if (!d) return "";
+          if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+            const [y, m, day] = d.split("-").map(Number);
+            return new Date(y, m - 1, day).toLocaleDateString();
+          }
+          const dt = new Date(d);
+          return isNaN(dt) ? String(d) : dt.toLocaleDateString();
+        })(q?.fecha);
+
+        const monto = Number(q?.precio?.monto ?? 0).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        const moneda = (q?.precio?.moneda || "").toUpperCase();
+
+        // Tarjeta "Última cotización"
+        body.innerHTML = `
+      <div class="row g-2">
+        <div class="col-12 col-md-6"><strong>Cliente:</strong> ${
+          q?.cliente || "—"
+        }</div>
+        <div class="col-6 col-md-3"><strong>Fecha:</strong> ${
+          fechaBonita || "—"
+        }</div>
+        <div class="col-6 col-md-3"><strong>Total:</strong> ${monto} ${moneda}</div>
+        <div class="col-12"><strong>Producto:</strong> ${
+          q?.producto || "—"
+        }</div>
+        ${
+          q?.detalle
+            ? `<div class="col-12"><strong>Detalle:</strong> ${q.detalle}</div>`
+            : ""
+        }
+      </div>
+    `;
+
+        // (Opcional) agrega también una fila a la lista
+        list.innerHTML = `
+      <div class="list-group-item px-0">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+          <div>
+            <div class="fw-700">${q?.cliente || "—"}</div>
+            <div class="text-secondary small">${q?.producto || "—"}</div>
+            <div class="text-secondary small">${fechaBonita || "—"}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-700">${monto} ${moneda}</div>
+            <span class="badge bg-success-subtle text-success-emphasis rounded-pill px-3">Generada</span>
+          </div>
+        </div>
+      </div>
+    `;
+      })();
     </script>
   </body>
 </html>
