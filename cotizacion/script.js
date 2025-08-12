@@ -7,6 +7,11 @@ const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 // ================== Utils ==================
+// 👉 pon esto cerca de tus utils:
+function quoteStorageKey(user, company) {
+  return `sp:lastQuote:${slug(user || "anon")}:${slug(company || "")}`;
+}
+
 // Dónde vive el frontend (GitHub Pages usa /<repo>/)
 const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
@@ -84,8 +89,10 @@ function tryExtractMiniQuote(text) {
         "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
       );
       console.log("MiniQuote:", miniQuote);
+      // antes: localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
       try {
-        localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
+        const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+        localStorage.setItem(KEY, JSON.stringify(miniQuote));
       } catch (e) {
         console.warn("No se pudo guardar lastQuote:", e);
       }
@@ -301,6 +308,10 @@ logoutBtn?.addEventListener("click", () => {
   localStorage.removeItem("threadId");
   sessionStorage.clear();
   window.location.href = BASE;
+  try {
+    const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+    localStorage.removeItem(KEY);
+  } catch {}
 });
 
 // ================== Reiniciar conversación (opcional) ==================
