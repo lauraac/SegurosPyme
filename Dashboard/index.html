@@ -159,66 +159,36 @@
                 Tus últimas cotizaciones para clientes Pyme
               </p>
 
-              <!-- Item -->
-              <div class="list-group list-group-flush">
-                <div class="list-group-item px-0">
-                  <div
-                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
-                  >
-                    <div>
-                      <div class="fw-700">Restaurante El Buen Sabor</div>
-                      <div class="text-secondary small">
-                        Responsabilidad Civil
-                      </div>
-                      <div class="text-secondary small">2024-01-15</div>
-                    </div>
-                    <div class="text-end">
-                      <div class="fw-700">$2,450</div>
-                      <span
-                        class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3"
-                        >Pendiente</span
-                      >
-                    </div>
-                  </div>
-                </div>
+              <!-- Lista dinámica -->
+              <div id="quotes-list" class="list-group list-group-flush"></div>
 
-                <div class="list-group-item px-0">
-                  <div
-                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
-                  >
-                    <div>
-                      <div class="fw-700">Logística Norte</div>
-                      <div class="text-secondary small">Daños a Terceros</div>
-                      <div class="text-secondary small">2024-01-12</div>
-                    </div>
-                    <div class="text-end">
-                      <div class="fw-700">$1,980</div>
-                      <span
-                        class="badge bg-success-subtle text-success-emphasis rounded-pill px-3"
-                        >Aprobada</span
-                      >
-                    </div>
-                  </div>
-                </div>
+              <!-- Estado vacío -->
+              <div
+                id="quotes-empty"
+                class="text-secondary border rounded-3 p-3 text-center"
+              >
+                Aún no tienes cotizaciones.
+                <a
+                  href="../cotizacion/index.html"
+                  class="btn btn-sm btn-primary ms-2"
+                >
+                  Nueva Cotización
+                </a>
+              </div>
 
-                <div class="list-group-item px-0">
-                  <div
-                    class="d-flex align-items-center justify-content-between flex-wrap gap-3"
-                  >
-                    <div>
-                      <div class="fw-700">Consultora Tech Solutions</div>
-                      <div class="text-secondary small">Errores</div>
-                      <div class="text-secondary small">2024-01-13</div>
-                    </div>
-                    <div class="text-end">
-                      <div class="fw-700">$1,800</div>
-                      <span
-                        class="badge bg-success-subtle text-success-emphasis rounded-pill px-3"
-                        >Aprobada</span
-                      >
-                    </div>
-                  </div>
+              <!-- Última cotización -->
+              <div
+                id="last-quote"
+                class="mt-4 p-3 rounded-3 border bg-white d-none"
+              >
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <i class="bi bi-receipt text-primary"></i>
+                  <h6 class="mb-0 fw-700">Última cotización generada</h6>
                 </div>
+                <div class="small text-secondary">
+                  Se actualiza al confirmar el presupuesto en el chat
+                </div>
+                <div id="last-quote-body" class="mt-2"></div>
               </div>
             </div>
           </div>
@@ -295,12 +265,20 @@
 
       // Ajusta el link "Nueva Cotización" para pasar también por querystring
       const newQuoteLink = document.querySelector(
-        'a[href*="Cotizacion/index.html"]'
+        'a[href*="cotizacion/index.html"]'
       );
       if (newQuoteLink) {
-        newQuoteLink.href = `../Cotizacion/index.html?name=${encodeURIComponent(
+        newQuoteLink.href = `../cotizacion/index.html?name=${encodeURIComponent(
           name
         )}&company=${encodeURIComponent(company)}`;
+      }
+      const quotesList = document.getElementById("quotes-list");
+      const quotesEmpty = document.getElementById("quotes-empty");
+
+      if (quotesList && quotesList.children.length > 0) {
+        quotesEmpty.classList.add("d-none");
+      } else {
+        quotesEmpty.classList.remove("d-none");
       }
     </script>
   </body>

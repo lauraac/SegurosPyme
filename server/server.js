@@ -21,24 +21,27 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(ROOT_DIR, "index.html"));
 });
 
-// ✅ rutas explícitas al Panel y a Cotización (por si falla el static)
-const PANEL_FILE = path.join(ROOT_DIR, "Panel", "index.html");
-const COTI_FILE = path.join(ROOT_DIR, "Cotizacion", "index.html");
+// === Rutas explícitas correctas ===
+const DASHBOARD_FILE = path.join(ROOT_DIR, "Dashboard", "index.html");
+const COTI_FILE = path.join(ROOT_DIR, "cotizacion", "index.html"); // minúsculas
 
-// Mensajes de ayuda en consola si faltan los archivos
-if (!fs.existsSync(PANEL_FILE)) {
-  console.warn("⚠️ No se encontró Panel/index.html en:", PANEL_FILE);
+// Mensajes de ayuda si faltan archivos
+if (!fs.existsSync(DASHBOARD_FILE)) {
+  console.warn("⚠️ No se encontró Dashboard/index.html en:", DASHBOARD_FILE);
 }
 if (!fs.existsSync(COTI_FILE)) {
-  console.warn("⚠️ No se encontró Cotizacion/index.html en:", COTI_FILE);
+  console.warn("⚠️ No se encontró cotizacion/index.html en:", COTI_FILE);
 }
 
 // Endpoints explícitos (case-insensitive)
 app.get(
-  ["/panel", "/Panel", "/panel/index.html", "/Panel/index.html"],
-  (_req, res) => {
-    res.sendFile(PANEL_FILE);
-  }
+  [
+    "/dashboard",
+    "/Dashboard",
+    "/dashboard/index.html",
+    "/Dashboard/index.html",
+  ],
+  (_req, res) => res.sendFile(DASHBOARD_FILE)
 );
 app.get(
   [
@@ -47,9 +50,7 @@ app.get(
     "/cotizacion/index.html",
     "/Cotizacion/index.html",
   ],
-  (_req, res) => {
-    res.sendFile(COTI_FILE);
-  }
+  (_req, res) => res.sendFile(COTI_FILE)
 );
 
 // Salud opcional
@@ -96,7 +97,7 @@ Reglas:
 - Si preguntan cosas fuera de Seguros PyME, responde: "Esta consulta no está dentro del alcance del asistente de Seguros PyME."
 `;
 
-  // Contexto dinámico para saludar por nombre y no pedirlo otra vez
+  // Contexto dinámico
   const CONTEXTO = `El usuario se llama "${userName || "Cliente"}"${
     userCompany ? ` y su empresa es "${userCompany}"` : ""
   }. Salúdalo por su nombre si corresponde y NO le pidas el nombre de nuevo.`;
