@@ -8,6 +8,17 @@ const logoutBtn = document.getElementById("logout-btn");
 
 // ================== Utils ==================
 // 👉 pon esto cerca de tus utils:
+function slug(s) {
+  return String(s || "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^\w-]/g, "")
+    .toLowerCase();
+}
+function quotesKey(user, company) {
+  return `sp:quotes:${slug(user || "anon")}:${slug(company || "")}`;
+}
+
 function quoteStorageKey(user, company) {
   return `sp:lastQuote:${slug(user || "anon")}:${slug(company || "")}`;
 }
@@ -83,6 +94,25 @@ function tryExtractMiniQuote(text) {
     const obj = JSON.parse(String(m[1]).trim());
     if (obj && obj.event === "presupuesto_ok") {
       miniQuote = obj;
+      // 👉 guardar historial (últimas 10, por ejemplo)
+      try {
+        const KEY = quotesKey(USER_NAME, USER_COMPANY);
+        const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
+
+        let arr = [];
+        try {
+          arr = JSON.parse(localStorage.getItem(KEY) || "[]");
+        } catch {}
+        arr = [enriched, ...arr].slice(0, 10); // conserva sólo las 10 más recientes
+
+        localStorage.setItem(KEY, JSON.stringify(arr));
+
+        // compat: sigue guardando la última (por si algo la usa)
+        localStorage.setItem("lastQuote", JSON.stringify(enriched));
+      } catch (e) {
+        console.warn("No se pudo guardar el historial de cotizaciones:", e);
+      }
+
       if (pdfBtn) pdfBtn.disabled = false;
       addMessage(
         "Sistema",
