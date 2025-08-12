@@ -8,8 +8,12 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/\s+/g, "_")
       .replace(/[^\w-]/g, "")
       .toLowerCase();
-  const quotesKey = (user, company) =>
-    `sp:quotes:${slug(user || "anon")}:${slug(company || "")}`;
+
+
+      function quotesKey(user, company) {
+  return `sp:quotes:${slug(user || "anon")}:${slug(company || "")}`;
+}
+
 
   const fmtDate = (d) => {
     if (!d) return "";
@@ -34,9 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const company = compQS || localStorage.getItem("userCompany") || "Servifacil";
 
   // Pinta encabezado
-  document.getElementById("welcomeName")!.textContent = name.toUpperCase();
-  document.getElementById("topUser")!.textContent = name.toUpperCase();
-  document.getElementById("topCompany")!.textContent = company;
+document.getElementById("welcomeName")?.textContent = (name ?? "").toUpperCase();
+document.getElementById("topUser")?.textContent = (name ?? "").toUpperCase();
+document.getElementById("topCompany")?.textContent = company ?? "";
+
 
   // Persiste sesión (para la navegación entre pantallas)
   localStorage.setItem("userName", name);

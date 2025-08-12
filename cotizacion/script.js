@@ -53,13 +53,6 @@ function prettyDate(d) {
   const dt = new Date(d);
   return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
-function slug(s) {
-  return String(s || "")
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^\w-]/g, "");
-}
-
 // ================== Sesión usuario ==================
 const USER_NAME =
   getParam("name") || localStorage.getItem("userName") || "Cliente";
