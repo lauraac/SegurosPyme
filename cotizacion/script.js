@@ -26,14 +26,10 @@ const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
   : "/";
 
-// Dónde está la API
-// Dónde está la API
-const API_URL =
-  location.hostname.endsWith("github.io") ||
-  location.hostname === "localhost" ||
-  location.hostname === "127.0.0.1"
-    ? "https://seguros-pyme-api-bn8n.vercel.app/api/chat" // <-- Vercel siempre en dev
-    : "/api/chat"; // <-- solo si en producción sirves el back en el mismo dominio
+// ================== Dónde está la API (FIJO a tu Vercel) ==================
+const API_URL = "https://seguros-pyme-api.vercel.app/api/chat";
+
+// (Si algún día sirves el backend en el mismo dominio que el front, entonces podrías usar "/api/chat")
 
 function getParam(n) {
   return new URLSearchParams(location.search).get(n);
