@@ -1,23 +1,20 @@
-// Esperar a que cargue el DOM
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.querySelector("form");
-  const nombreInput = document.querySelector('input[placeholder="Juan Pérez"]');
-  const empresaInput = document.querySelector(
-    'input[placeholder="Tu empresa de seguros"]'
-  );
-  const emailInput = document.querySelector('input[type="email"]');
-  const passwordInput = document.querySelector('input[type="password"]');
+  const form = document.getElementById("signupForm");
+  const nombreInput = document.getElementById("nombre");
+  const empresaInput = document.getElementById("empresa");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
 
-  // Crea (por JS) un texto de ayuda bajo el campo de contraseña sin tocar el HTML
+  // === Ayuda de contraseña (no rompe layout) ===
   const pwdHelp = document.createElement("div");
-  pwdHelp.className = "form-text mt-1"; // usa estilos Bootstrap existentes
-  pwdHelp.style.color = "rgba(255,255,255,.75)"; // combina con tu tema
-  passwordInput.closest(".input-group").parentElement.appendChild(pwdHelp);
+  pwdHelp.className = "form-text mt-1";
+  pwdHelp.style.color = "rgba(255,255,255,.75)";
+  // Colocar el mensaje DESPUÉS del .input-group
+  const pwdGroup = passwordInput.closest(".input-group");
+  pwdGroup.insertAdjacentElement("afterend", pwdHelp);
 
-  function validarEmail(v) {
-    // Sencilla y suficiente para UI
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-  }
+  // === Validaciones ===
+  const validarEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   function getPasswordStatus(v) {
     const checks = {
@@ -25,11 +22,11 @@ document.addEventListener("DOMContentLoaded", () => {
       mayúscula: /[A-Z]/.test(v),
       minúscula: /[a-z]/.test(v),
       número: /[0-9]/.test(v),
-      símbolo: /[^\w\s]/.test(v), // símbolo/puntuación
+      símbolo: /[^\w\s]/.test(v),
       "sin espacios": !/\s/.test(v),
     };
     const faltantes = Object.entries(checks)
-      .filter(([_, ok]) => !ok)
+      .filter(([, ok]) => !ok)
       .map(([k]) => k);
     return { ok: faltantes.length === 0, faltantes };
   }
@@ -38,7 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const v = passwordInput.value.trim();
     const { ok, faltantes } = getPasswordStatus(v);
 
-    // Estilos Bootstrap sin cambiar el layout
     passwordInput.classList.toggle("is-valid", ok && v !== "");
     passwordInput.classList.toggle("is-invalid", !ok && v !== "");
 
@@ -48,33 +44,42 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (ok) {
-      pwdHelp.textContent = "Contraseña segura ✓";
-      pwdHelp.style.color = "rgba(255,255,255,.9)";
-    } else {
-      pwdHelp.textContent = "Te falta: " + faltantes.join(", ") + ".";
-      pwdHelp.style.color = "rgba(255,255,255,.75)";
-    }
+    pwdHelp.textContent = ok
+      ? "Contraseña segura ✓"
+      : "Te falta: " + faltantes.join(", ") + ".";
+    pwdHelp.style.color = ok ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.75)";
   }
 
-  // Feedback en vivo
   passwordInput.addEventListener("input", pintarPasswordFeedback);
+  pintarPasswordFeedback();
 
+  // === Envío ===
   form.addEventListener("submit", (e) => {
-    e.preventDefault(); // Evita recargar la página
+    e.preventDefault();
 
-    const nombre = (nombreInput.value || "").trim();
-    const empresa = (empresaInput.value || "").trim();
-    const email = (emailInput.value || "").trim();
-    const password = (passwordInput.value || "").trim();
+    const nombre = nombreInput.value.trim();
+    const empresa = empresaInput.value.trim();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
 
+    // Reglas básicas
     if (!nombre || !email || !password) {
-      alert("Por favor completa todos los campos obligatorios");
+      Swal.fire({
+        icon: "warning",
+        title: "Campos incompletos",
+        text: "Por favor completa nombre, correo y contraseña.",
+        confirmButtonColor: "#644bf3",
+      });
       return;
     }
 
     if (!validarEmail(email)) {
-      alert("Por favor ingresa un correo electrónico válido");
+      Swal.fire({
+        icon: "error",
+        title: "Email inválido",
+        text: "Ingresa un correo electrónico válido.",
+        confirmButtonColor: "#644bf3",
+      });
       emailInput.focus();
       return;
     }
@@ -85,27 +90,34 @@ document.addEventListener("DOMContentLoaded", () => {
       Swal.fire({
         icon: "error",
         title: "Contraseña inválida",
-        html: `<p style="margin:0">Te falta: <b>${faltantes.join(
-          ", "
-        )}</b></p>`,
-        confirmButtonText: "Entendido",
+        html: `Te falta: <b>${faltantes.join(", ")}</b>`,
         confirmButtonColor: "#644bf3",
       });
-
       passwordInput.focus();
       return;
     }
 
-    // Guardar datos en localStorage
-    localStorage.setItem("userName", nombre);
-    localStorage.setItem("userCompany", empresa);
-    localStorage.setItem("userEmail", email);
-    localStorage.setItem("userPassword", password);
+    // === Guardar sesión en localStorage ===
+    try {
+      localStorage.setItem("userName", nombre);
+      localStorage.setItem("userCompany", empresa);
+      localStorage.setItem("userEmail", email.toLowerCase());
+      localStorage.setItem("userPassword", password);
+    } catch (err) {
+      console.error("Error guardando en localStorage:", err);
+      Swal.fire({
+        icon: "error",
+        title: "No se pudo guardar la sesión",
+        text: "Revisa permisos del navegador.",
+        confirmButtonColor: "#644bf3",
+      });
+      return;
+    }
 
-    // Redirigir al dashboard
-    window.location.href = "../Dashboard/index.html";
+    // Redirigir al Dashboard con QS para primer render
+    const qs = `?name=${encodeURIComponent(
+      nombre
+    )}&company=${encodeURIComponent(empresa)}`;
+    window.location.href = `../Dashboard/index.html${qs}`;
   });
-
-  // Pintar ayuda inicial
-  pintarPasswordFeedback();
 });

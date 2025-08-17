@@ -3,15 +3,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
 
-  function validarEmail(v) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-  }
+  const validarEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-  form.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
 
-    const email = emailInput.value.trim();
-    const password = passwordInput.value.trim();
+    const email = (emailInput.value || "").trim().toLowerCase();
+    const password = (passwordInput.value || "").trim();
 
     if (!email || !password) {
       Swal.fire({
@@ -36,11 +34,31 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const savedEmail = localStorage.getItem("userEmail");
-    const savedPassword = localStorage.getItem("userPassword");
+    const savedEmail = (localStorage.getItem("userEmail") || "").toLowerCase();
+    const savedPassword = localStorage.getItem("userPassword") || "";
 
+    // Si no hay cuenta guardada, sugiere registrarse
+    if (!savedEmail || !savedPassword) {
+      Swal.fire({
+        icon: "info",
+        title: "Aún no tienes cuenta",
+        html: "<p style='margin:0'>Regístrate primero para crear tu usuario.</p>",
+        confirmButtonText: "Ir a Registro",
+        confirmButtonColor: "#644bf3",
+      }).then(() => {
+        window.location.href = "../Registro/index.html";
+      });
+      return;
+    }
+
+    // Compara normalizando correo
     if (email === savedEmail && password === savedPassword) {
-      // Popup de éxito breve y luego redirección
+      // opcional: refrescar nombre/empresa a sesión
+      const name = localStorage.getItem("userName") || "";
+      const company = localStorage.getItem("userCompany") || "";
+      if (name) localStorage.setItem("userName", name);
+      if (company) localStorage.setItem("userCompany", company);
+
       Swal.fire({
         icon: "success",
         title: "¡Bienvenida!",
