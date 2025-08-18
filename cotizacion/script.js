@@ -1,3 +1,7 @@
+// ================== Config rápido ==================
+const AUTO_DOWNLOAD_PDF = true; // Auto-descargar PDF al confirmar
+const AUTO_DOWNLOAD_JSON = false; // (opcional) Auto-descargar JSON al confirmar
+
 // ================== UI ==================
 const input = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
@@ -20,8 +24,6 @@ function quotesKey(user, company) {
 function quoteStorageKey(user, company) {
   return `sp:lastQuote:${slug(user || "anon")}:${slug(company || "")}`;
 }
-
-// Frontend base (GitHub Pages)
 const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
   : "/";
@@ -29,8 +31,7 @@ const BASE = location.hostname.endsWith("github.io")
 // ================== Dónde está la API (FIJO a tu Vercel) ==================
 const API_URL = "https://seguros-pyme-api.vercel.app/api/chat";
 
-// (Si algún día sirves el backend en el mismo dominio que el front, entonces podrías usar "/api/chat")
-
+// Helpers
 function getParam(n) {
   return new URLSearchParams(location.search).get(n);
 }
@@ -57,13 +58,10 @@ const qCompany = getParam("company");
 const USER_NAME = qName ?? localStorage.getItem("userName");
 const USER_COMPANY = qCompany ?? localStorage.getItem("userCompany");
 
-// Si no hay sesión, redirige a login/landing
 if (!USER_NAME || !USER_COMPANY) {
-  window.location.href = "../index.html"; // ajusta la ruta si aplica
+  window.location.href = "../index.html";
   throw new Error("Sin sesión");
 }
-
-// Persiste si vinieron por QS
 if (qName) localStorage.setItem("userName", USER_NAME);
 if (qCompany) localStorage.setItem("userCompany", USER_COMPANY);
 
@@ -79,6 +77,7 @@ if (pdfBtn) pdfBtn.disabled = true;
 
 // ================== Chat helpers ==================
 function addMessage(sender, text) {
+  if (!text) return;
   const div = document.createElement("div");
   div.className = "text-start text-white mb-2";
   div.innerHTML = `<strong>${sender}:</strong> ${text}`;
@@ -86,54 +85,126 @@ function addMessage(sender, text) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-/**
- * Busca un bloque ```json ... ``` (o ``` ... ```) y, si es
- * { event: "presupuesto_ok", ... }, habilita el PDF y guarda historial.
- */
-function tryExtractMiniQuote(text) {
-  const m = String(text || "").match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (!m) return;
+// Descarga JSON (opcional)
+function downloadJSON(filename, dataObj) {
   try {
-    const obj = JSON.parse(String(m[1]).trim());
-    if (obj && obj.event === "presupuesto_ok") {
-      miniQuote = obj;
-
-      // Guardar historial (por usuario/empresa) máx 10
-      const KEY = quotesKey(USER_NAME, USER_COMPANY);
-      const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
-
-      let arr = [];
-      try {
-        arr = JSON.parse(localStorage.getItem(KEY) || "[]");
-      } catch {}
-      arr = [enriched, ...arr].slice(0, 10);
-      localStorage.setItem(KEY, JSON.stringify(arr));
-
-      // Compat
-      localStorage.setItem("lastQuote", JSON.stringify(enriched));
-      try {
-        const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
-        localStorage.setItem(LKEY, JSON.stringify(miniQuote));
-      } catch {}
-
-      if (pdfBtn) pdfBtn.disabled = false;
-      addMessage(
-        "Sistema",
-        "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
-      );
-      console.log("MiniQuote:", miniQuote);
-    }
+    const blob = new Blob([JSON.stringify(dataObj, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   } catch (e) {
-    console.warn("Bloque JSON inválido:", e);
+    console.warn("No se pudo descargar JSON:", e);
   }
 }
 
-// Oculta ```...``` al usuario, pero permite detectarlo en background
+// ============= Detección de JSON inline o con backticks =============
+function extractJsonCandidate(text) {
+  if (!text) return null;
+  // 1) Bloque con backticks ```json ... ```
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1];
+
+  // 2) JSON en línea con "event":"presupuesto_ok"
+  const inline = text.match(
+    /\{[\s\S]*?"event"\s*:\s*"presupuesto_ok"[\s\S]*?\}/i
+  );
+  if (inline) return inline[0];
+
+  return null;
+}
+
+/**
+ * Extrae y procesa el mini-JSON de confirmación.
+ * Habilita PDF, guarda historial y autodispara descargas si aplica.
+ */
+async function tryExtractMiniQuote(text) {
+  const candidate = extractJsonCandidate(text);
+  if (!candidate) return;
+
+  let obj;
+  try {
+    obj = JSON.parse(candidate.trim());
+  } catch (_) {
+    try {
+      const fixed = candidate.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
+      obj = JSON.parse(fixed);
+    } catch {
+      return;
+    }
+  }
+
+  if (!obj || obj.event !== "presupuesto_ok") return;
+
+  miniQuote = obj;
+
+  // Guardar historial (máx 10 por usuario/empresa)
+  const KEY = quotesKey(USER_NAME, USER_COMPANY);
+  const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
+
+  let arr = [];
+  try {
+    arr = JSON.parse(localStorage.getItem(KEY) || "[]");
+  } catch {}
+  arr = [enriched, ...arr].slice(0, 10);
+  localStorage.setItem(KEY, JSON.stringify(arr));
+
+  // Compat + última para Dashboard
+  localStorage.setItem("lastQuote", JSON.stringify(enriched));
+  try {
+    const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+    localStorage.setItem(LKEY, JSON.stringify(miniQuote));
+  } catch {}
+
+  // Habilita PDF
+  if (pdfBtn) pdfBtn.disabled = false;
+  addMessage(
+    "Sistema",
+    "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
+  );
+
+  // (Opcional) auto-JSON
+  if (AUTO_DOWNLOAD_JSON) {
+    const filename = `Presupuesto_${slug(
+      miniQuote.cliente || USER_NAME || "cliente"
+    )}.json`;
+    downloadJSON(filename, miniQuote);
+  }
+
+  // (Opcional) auto-PDF
+  if (AUTO_DOWNLOAD_PDF) {
+    try {
+      await descargarPDFPresupuesto();
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  console.log("MiniQuote:", miniQuote);
+}
+
+// Oculta bloques ```...``` e inline JSON del mensaje mostrado y limpia comas
 function sanitizeAssistantReply(text) {
   if (!text) return "";
-  return String(text)
-    .replace(/```(?:json)?[\s\S]*?```/gi, "")
+  let out = String(text);
+
+  // Quita bloques con backticks (```json ... ```)
+  out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
+  // Quita JSON inline con event: presupuesto_ok
+  out = out.replace(/\{[\s\S]*?"event"\s*:\s*"presupuesto_ok"[\s\S]*?\}/gi, "");
+
+  // Limpia restos tipo ",  }", ", ,", espacios dobles y líneas vacías
+  out = out
+    .replace(/\s*,\s*(?=[\}\]])/g, "")
+    .replace(/(^|\n)\s*,\s*/g, "$1")
+    .replace(/\n{2,}/g, "\n")
     .trim();
+
+  return out;
 }
 
 // ================== Envío de mensaje ==================
@@ -162,9 +233,7 @@ async function sendMessage() {
 
     if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
     if (!ctype.includes("application/json")) {
-      throw new Error(
-        "La API no devolvió JSON (revisa CORS o la URL de la API)."
-      );
+      throw new Error("La API no devolvió JSON (revisa CORS o la URL).");
     }
 
     const data = JSON.parse(raw);
@@ -176,16 +245,15 @@ async function sendMessage() {
       return;
     }
 
-    // Ya terminó
     THREAD_ID = data.threadId;
     localStorage.setItem(threadKey(), THREAD_ID);
 
     // Pinta el mensaje SIN el JSON
     const shown = sanitizeAssistantReply(data.reply);
-    addMessage("Agente Seguros PyME", shown);
+    if (shown) addMessage("Agente Seguros PyME", shown);
 
-    // Analiza el texto ORIGINAL para habilitar el PDF
-    tryExtractMiniQuote(data.reply);
+    // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
+    await tryExtractMiniQuote(data.reply);
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
@@ -195,7 +263,7 @@ async function sendMessage() {
 // Click en enviar
 sendBtn?.addEventListener("click", sendMessage);
 
-// Enter para enviar (sin salto)
+// Enter para enviar
 input?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -210,13 +278,14 @@ async function descargarPDFPresupuesto() {
     return;
   }
   if (!window.jspdf?.jsPDF) {
-    alert("Falta jsPDF. Asegúrate de tener el CDN en el HTML.");
+    alert("Falta jsPDF. Agrega el CDN en el HTML.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
+  // Logo
   const logoUrl = `${BASE}img/pdf.png?v=2`;
   let logoDataUrl = null;
   try {
@@ -273,7 +342,7 @@ async function descargarPDFPresupuesto() {
   );
 
   try {
-    if (miniQuote) localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
+    localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
   } catch {}
   doc.save(
     `Presupuesto_${slug(miniQuote.cliente || USER_NAME || "cliente")}.pdf`
@@ -308,15 +377,10 @@ pdfBtn?.addEventListener("click", descargarPDFPresupuesto);
 // ================== Navegación ==================
 backBtn?.addEventListener("click", (e) => {
   e.preventDefault();
-  if (
-    document.referrer &&
-    new URL(document.referrer).origin === location.origin
-  ) {
-    history.back();
-  } else {
-    const fallback = backBtn.getAttribute("href") || BASE;
-    window.location.href = fallback;
-  }
+  const target = `../Dashboard/index.html?name=${encodeURIComponent(
+    USER_NAME
+  )}&company=${encodeURIComponent(USER_COMPANY)}`;
+  window.location.href = target;
 });
 
 logoutBtn?.addEventListener("click", () => {
@@ -346,7 +410,7 @@ async function pollThread(tid) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: null, // o "" si tu backend lo requiere
+        message: null,
         threadId: tid,
         userName: USER_NAME,
         userCompany: USER_COMPANY,
@@ -365,13 +429,12 @@ async function pollThread(tid) {
       return;
     }
 
-    // Ya terminó → pinta y procesa
     THREAD_ID = data.threadId;
     localStorage.setItem(threadKey(), THREAD_ID);
 
     const shown = sanitizeAssistantReply(data.reply);
-    addMessage("Agente Seguros PyME", shown);
-    tryExtractMiniQuote(data.reply);
+    if (shown) addMessage("Agente Seguros PyME", shown);
+    await tryExtractMiniQuote(data.reply);
   } catch (e) {
     console.error(e);
     addMessage("Sistema", `⚠️ ${e.message}`);
