@@ -1,5 +1,5 @@
 // ================== Config rápido ==================
-const AUTO_DOWNLOAD_PDF = true; // Auto-descargar PDF al confirmar
+const AUTO_DOWNLOAD_PDF = false; // ahora usamos confirm() al final
 const AUTO_DOWNLOAD_JSON = false; // (opcional) Auto-descargar JSON al confirmar
 
 // ================== UI ==================
@@ -195,7 +195,7 @@ function clearHistory() {
   localStorage.removeItem(HKEY);
 }
 
-// ===== HOTFIX: Estado PyME mínimo para contexto y anti-loop =====
+// ===== HOTFIX Estado PyME + captura de montos por pregunta =====
 const PYME_STATE_KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
 let PYME_STATE = (() => {
   try {
@@ -212,7 +212,7 @@ function savePymeState() {
 function updateStateFromUser(text) {
   const t = String(text || "").trim();
 
-  // Nombre (solo cuando es explícito)
+  // Nombre (solo explícito)
   const m1 = t.match(
     /(?:mi\s+negocio\s+se\s+llama|se\s+llama|nombre\s*[:=])\s+(.+)/i
   );
@@ -245,6 +245,40 @@ function buildShortContext() {
   if (PYME_STATE.actividadPrincipal)
     parts.push(`Actividad principal: ${PYME_STATE.actividadPrincipal}`);
   return parts.length ? `[[Contexto conocido]]\n${parts.join("\n")}\n\n` : "";
+}
+
+// Captura de montos por pregunta
+let LAST_QUESTION = ""; // última pregunta del bot
+const CURRENT_INPUT = {
+  sumaContenido: null,
+  sumaEdificio: null,
+  sumaValoresCaja: null,
+  sumaValoresTransito: null,
+  sumaElectronicos: null,
+  sumaCristales: null,
+};
+
+function mapQuestionToField(q) {
+  const t = (q || "").toLowerCase();
+  if (/contenido/.test(t)) return "sumaContenido";
+  if (/edificio/.test(t)) return "sumaEdificio";
+  if (/valores?\s+en\s+caja/.test(t)) return "sumaValoresCaja";
+  if (/valores?\s+en\s+tr[aá]nsito/.test(t)) return "sumaValoresTransito";
+  if (/electr[oó]nicos?/.test(t)) return "sumaElectronicos";
+  if (/cristales?/.test(t)) return "sumaCristales";
+  return null;
+}
+function tryCaptureAmountFromUserReply(userText) {
+  const clean = String(userText || "").replace(/[^\d.,]/g, "");
+  if (!clean) return null;
+  // Normaliza 1.200.000,50 -> 1200000.50 ; 1200000 -> 1200000
+  const normalized = Number(clean.replace(/\./g, "").replace(/,/g, "."));
+  if (!isFinite(normalized)) return null;
+
+  const field = mapQuestionToField(LAST_QUESTION);
+  if (field) {
+    CURRENT_INPUT[field] = normalized;
+  }
 }
 
 // ================== Guardado para Panel/Dashboard ==================
@@ -351,7 +385,7 @@ async function tryExtractMiniQuote(text) {
   );
   saveQuoteForDashboard(miniQuote, "presupuesto");
 
-  // (Opcional) auto-JSON
+  // Confirm para descargar ahora
   if (AUTO_DOWNLOAD_JSON) {
     const filename = `Presupuesto_${slug(
       miniQuote.cliente || USER_NAME || "cliente"
@@ -359,8 +393,7 @@ async function tryExtractMiniQuote(text) {
     downloadJSON(filename, miniQuote);
   }
 
-  // (Opcional) auto-PDF
-  if (AUTO_DOWNLOAD_PDF) {
+  if (confirm("Presupuesto listo. ¿Descargar el PDF ahora?")) {
     try {
       await descargarPDFPresupuesto();
     } catch (e) {
@@ -371,7 +404,7 @@ async function tryExtractMiniQuote(text) {
 
 /**
  * JSON del flujo PyME (pyme_fields_ok)
- * Arma 3 planes, guarda y (opcional) auto-descarga PDF.
+ * Arma 3 planes, guarda y (opcional) descarga PDF tras confirm().
  */
 async function tryExtractPymeQuote(text) {
   const candidate = extractJsonCandidate(text);
@@ -391,7 +424,6 @@ async function tryExtractPymeQuote(text) {
 
   if (!obj || obj.event !== "pyme_fields_ok") return;
 
-  // Si no elegible: informamos y NO generamos PDF
   if (!obj.elegibilidad?.esElegible) {
     addMessage(
       "Agente Seguros PyME",
@@ -402,12 +434,29 @@ async function tryExtractPymeQuote(text) {
     return;
   }
 
-  // Construimos los 3 planes en el FRONT
-  const planes = buildPlansFromInput(obj.input);
+  processPyMEAndOfferDownload(obj.input, Number(obj.validezDias || 30));
+}
+
+// Si no llega JSON válido tras “sí”, armamos la cotización con lo capturado
+function buildInputFromState() {
+  return {
+    negocioNombre: PYME_STATE.negocioNombre || "",
+    actividadPrincipal: PYME_STATE.actividadPrincipal || "",
+    sumaContenido: Number(CURRENT_INPUT.sumaContenido || 0),
+    sumaEdificio: Number(CURRENT_INPUT.sumaEdificio || 0),
+    sumaValoresCaja: Number(CURRENT_INPUT.sumaValoresCaja || 0),
+    sumaValoresTransito: Number(CURRENT_INPUT.sumaValoresTransito || 0),
+    sumaElectronicos: Number(CURRENT_INPUT.sumaElectronicos || 0),
+    sumaCristales: Number(CURRENT_INPUT.sumaCristales || 0),
+  };
+}
+
+function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
+  const planes = buildPlansFromInput(inputObj);
   const quoteResult = {
-    input: obj.input,
+    input: inputObj,
     planes,
-    validezDias: Number(obj.validezDias || 30),
+    validezDias: Number(validezDias || 30),
     fecha: new Date().toISOString().slice(0, 10),
     folio: crypto.randomUUID?.() || String(Date.now()),
   };
@@ -418,17 +467,12 @@ async function tryExtractPymeQuote(text) {
     "Sistema",
     "✅ Cotización PyME armada. Ya puedes descargar el PDF."
   );
-
   window._lastPyME = quoteResult;
   saveQuoteForDashboard(quoteResult, "pyme");
 
-  // Auto-descarga PDF si está prendido
-  if (AUTO_DOWNLOAD_PDF) {
-    try {
-      await descargarPDFPyME(quoteResult);
-    } catch (e) {
-      console.warn(e);
-    }
+  // Confirm para descargar ahora
+  if (confirm("Cotización lista. ¿Descargar el PDF ahora?")) {
+    descargarPDFPyME(quoteResult).catch(console.warn);
   }
 }
 
@@ -461,7 +505,7 @@ async function recoverIfStuck(assistantShownText) {
   if (!assistantShownText) return;
   if (antiLoopGuardCount >= 3) return;
 
-  const t = assistantShownText.toLowerCase();
+  LAST_QUESTION = assistantShownText || LAST_QUESTION; // guarda última pregunta
   const asksName =
     /¿cu[aá]l\s+es\s+el\s+nombre\s+del\s+negocio|ind[íi]came\s+el\s+nombre\s+del\s+negocio|nombre\s+del\s+negocio\?/i.test(
       assistantShownText
@@ -488,10 +532,30 @@ async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // Actualiza estado + historial
+  // Actualiza estado (nombre/actividad) + intenta capturar monto
   updateStateFromUser(userMessage);
-  pushHistory("user", userMessage);
+  tryCaptureAmountFromUserReply(userMessage);
 
+  // Si usuario dijo "sí" y no llega JSON, construimos desde estado
+  if (/^\s*s[íi]\s*$/i.test(userMessage)) {
+    const inputObj = buildInputFromState();
+    // Validación mínima: tener al menos nombre, actividad y algún monto > 0
+    const hasAnySum =
+      inputObj.sumaContenido ||
+      inputObj.sumaEdificio ||
+      inputObj.sumaValoresCaja ||
+      inputObj.sumaValoresTransito ||
+      inputObj.sumaElectronicos ||
+      inputObj.sumaCristales;
+
+    if (inputObj.negocioNombre && inputObj.actividadPrincipal && hasAnySum) {
+      // Evita que se vea JSON: armamos directo y ofrecemos descarga
+      processPyMEAndOfferDownload(inputObj, 30);
+      // aún así enviamos al backend para mantener coherencia del hilo
+    }
+  }
+
+  pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
   input.value = "";
   input.focus();
@@ -543,6 +607,9 @@ async function sendMessageInternal(userMessage, withContext = false) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
       await recoverIfStuck(shown);
+
+      // Captura la "última pregunta" para mapear el siguiente número
+      LAST_QUESTION = shown;
     } else {
       // si no mostró nada (solo JSON), igual guarda algo en history
       pushHistory("assistant", data.reply || "");
@@ -847,7 +914,7 @@ async function pollThread(tid) {
         userName: USER_NAME,
         userCompany: USER_COMPANY,
         poll: true,
-        history: getHistory(), // <<< envía memoria también en polling
+        history: getHistory(), // envía memoria también en polling
       }),
     });
 
@@ -869,6 +936,7 @@ async function pollThread(tid) {
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
+      LAST_QUESTION = shown; // para mapear el siguiente número
       await recoverIfStuck(shown);
     }
     await tryExtractMiniQuote(data.reply);
