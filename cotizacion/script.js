@@ -177,6 +177,76 @@ let THREAD_ID = localStorage.getItem(threadKey()) || null;
 let miniQuote = null; // { event:"presupuesto_ok", ... }
 if (pdfBtn) pdfBtn.disabled = true;
 
+// ================== Historial (memoria ligera) ==================
+const HKEY = `sp:history:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+function getHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HKEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+function pushHistory(role, content) {
+  const h = getHistory();
+  h.push({ role, content });
+  localStorage.setItem(HKEY, JSON.stringify(h.slice(-14)));
+}
+function clearHistory() {
+  localStorage.removeItem(HKEY);
+}
+
+// ===== HOTFIX: Estado PyME mínimo para contexto y anti-loop =====
+const PYME_STATE_KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+let PYME_STATE = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(PYME_STATE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+})();
+function savePymeState() {
+  try {
+    localStorage.setItem(PYME_STATE_KEY, JSON.stringify(PYME_STATE));
+  } catch {}
+}
+function updateStateFromUser(text) {
+  const t = String(text || "").trim();
+
+  // Nombre (solo cuando es explícito)
+  const m1 = t.match(
+    /(?:mi\s+negocio\s+se\s+llama|se\s+llama|nombre\s*[:=])\s+(.+)/i
+  );
+  if (m1 && !PYME_STATE.negocioNombre) {
+    PYME_STATE.negocioNombre = m1[1].trim().replace(/[."”]+$/, "");
+    savePymeState();
+  }
+
+  // Actividad principal
+  const m2 = t.match(
+    /(?:actividad\s*principal\s*[:=]|actividad\s*[:=])\s+(.+)/i
+  );
+  if (m2 && !PYME_STATE.actividadPrincipal) {
+    PYME_STATE.actividadPrincipal = m2[1].trim().replace(/[."”]+$/, "");
+    savePymeState();
+  } else if (
+    /^(es|somos|vendo|vendemos|fabricamos|brindo|ofrezco|ofrecemos)\b/i.test(
+      t
+    ) &&
+    !PYME_STATE.actividadPrincipal
+  ) {
+    PYME_STATE.actividadPrincipal = t.replace(/[."”]+$/, "").trim();
+    savePymeState();
+  }
+}
+function buildShortContext() {
+  const parts = [];
+  if (PYME_STATE.negocioNombre)
+    parts.push(`Nombre del negocio: ${PYME_STATE.negocioNombre}`);
+  if (PYME_STATE.actividadPrincipal)
+    parts.push(`Actividad principal: ${PYME_STATE.actividadPrincipal}`);
+  return parts.length ? `[[Contexto conocido]]\n${parts.join("\n")}\n\n` : "";
+}
+
 // ================== Guardado para Panel/Dashboard ==================
 function saveQuoteForDashboard(payload, kind) {
   // kind: "presupuesto" | "pyme"
@@ -385,24 +455,66 @@ function sanitizeAssistantReply(text) {
   return out;
 }
 
+// ====== Anti-loop suave: si repite un campo ya dado, lo re-afirma y empuja ======
+let antiLoopGuardCount = 0;
+async function recoverIfStuck(assistantShownText) {
+  if (!assistantShownText) return;
+  if (antiLoopGuardCount >= 3) return;
+
+  const t = assistantShownText.toLowerCase();
+  const asksName =
+    /¿cu[aá]l\s+es\s+el\s+nombre\s+del\s+negocio|ind[íi]came\s+el\s+nombre\s+del\s+negocio|nombre\s+del\s+negocio\?/i.test(
+      assistantShownText
+    );
+  const asksAct = /actividad\s+principal/i.test(assistantShownText);
+
+  if (asksName && PYME_STATE.negocioNombre) {
+    antiLoopGuardCount++;
+    const msg = `El nombre del negocio es: ${PYME_STATE.negocioNombre}. Por favor, continúa con la Actividad Principal.`;
+    addMessage("Tú", msg);
+    input.value = "";
+    await sendMessageInternal(msg, /*withCtx*/ true);
+  } else if (asksAct && PYME_STATE.actividadPrincipal) {
+    antiLoopGuardCount++;
+    const msg = `La actividad principal es: ${PYME_STATE.actividadPrincipal}. Continúa con los valores: Contenido, Edificio (si aplica), Valores en caja, Valores en tránsito, Electrónicos y Cristales.`;
+    addMessage("Tú", msg);
+    input.value = "";
+    await sendMessageInternal(msg, /*withCtx*/ true);
+  }
+}
+
 // ================== Envío de mensaje ==================
 async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
+  // Actualiza estado + historial
+  updateStateFromUser(userMessage);
+  pushHistory("user", userMessage);
+
   addMessage("Tú", userMessage);
   input.value = "";
   input.focus();
 
+  await sendMessageInternal(userMessage, /*withCtx*/ true);
+}
+
+// Enviar al backend con opción de contexto
+async function sendMessageInternal(userMessage, withContext = false) {
   try {
+    const payloadMsg = withContext
+      ? buildShortContext() + userMessage
+      : userMessage;
+
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: userMessage,
+        message: payloadMsg,
         threadId: THREAD_ID,
         userName: USER_NAME,
         userCompany: USER_COMPANY,
+        history: getHistory(), // <<< memoria ligera
       }),
     });
 
@@ -410,9 +522,8 @@ async function sendMessage() {
     const raw = await res.text();
 
     if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
-    if (!ctype.includes("application/json")) {
+    if (!ctype.includes("application/json"))
       throw new Error("La API no devolvió JSON (revisa CORS o la URL).");
-    }
 
     const data = JSON.parse(raw);
 
@@ -428,7 +539,14 @@ async function sendMessage() {
 
     // Pinta el mensaje SIN el JSON
     const shown = sanitizeAssistantReply(data.reply);
-    if (shown) addMessage("Agente Seguros PyME", shown);
+    if (shown) {
+      addMessage("Agente Seguros PyME", shown);
+      pushHistory("assistant", shown);
+      await recoverIfStuck(shown);
+    } else {
+      // si no mostró nada (solo JSON), igual guarda algo en history
+      pushHistory("assistant", data.reply || "");
+    }
 
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
     await tryExtractMiniQuote(data.reply);
@@ -700,6 +818,7 @@ logoutBtn?.addEventListener("click", () => {
   localStorage.removeItem("userCompany");
   localStorage.removeItem(threadKey());
   localStorage.removeItem("threadId"); // legacy
+  clearHistory();
   sessionStorage.clear();
   window.location.href = BASE;
   try {
@@ -712,6 +831,7 @@ logoutBtn?.addEventListener("click", () => {
 document.getElementById("new-quote")?.addEventListener("click", () => {
   localStorage.removeItem(threadKey());
   localStorage.removeItem("threadId"); // legacy
+  clearHistory();
   location.reload();
 });
 
@@ -727,6 +847,7 @@ async function pollThread(tid) {
         userName: USER_NAME,
         userCompany: USER_COMPANY,
         poll: true,
+        history: getHistory(), // <<< envía memoria también en polling
       }),
     });
 
@@ -745,7 +866,11 @@ async function pollThread(tid) {
     localStorage.setItem(threadKey(), THREAD_ID);
 
     const shown = sanitizeAssistantReply(data.reply);
-    if (shown) addMessage("Agente Seguros PyME", shown);
+    if (shown) {
+      addMessage("Agente Seguros PyME", shown);
+      pushHistory("assistant", shown);
+      await recoverIfStuck(shown);
+    }
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
   } catch (e) {
