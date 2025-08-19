@@ -177,6 +177,25 @@ let THREAD_ID = localStorage.getItem(threadKey()) || null;
 let miniQuote = null; // { event:"presupuesto_ok", ... }
 if (pdfBtn) pdfBtn.disabled = true;
 
+// ================== Guardado para Panel/Dashboard ==================
+function saveQuoteForDashboard(payload, kind) {
+  // kind: "presupuesto" | "pyme"
+  const wrapped = {
+    kind,
+    data: payload,
+    user: USER_NAME,
+    company: USER_COMPANY,
+    createdAt: new Date().toISOString(),
+  };
+  try {
+    const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+    localStorage.setItem(LKEY, JSON.stringify(wrapped));
+    localStorage.setItem("lastQuote", JSON.stringify(wrapped)); // compat
+  } catch (e) {
+    console.warn("No se pudo persistir la cotización:", e);
+  }
+}
+
 // ================== Chat helpers ==================
 function addMessage(sender, text) {
   if (!text) return;
@@ -254,19 +273,13 @@ async function tryExtractMiniQuote(text) {
   arr = [enriched, ...arr].slice(0, 10);
   localStorage.setItem(KEY, JSON.stringify(arr));
 
-  // Compat + última para Dashboard
-  localStorage.setItem("lastQuote", JSON.stringify(enriched));
-  try {
-    const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
-    localStorage.setItem(LKEY, JSON.stringify(miniQuote));
-  } catch {}
-
-  // Habilita PDF
+  // Habilita PDF + guarda formato unificado para Panel
   if (pdfBtn) pdfBtn.disabled = false;
   addMessage(
     "Sistema",
     "✅ Presupuesto confirmado. Ya puedes descargar el PDF."
   );
+  saveQuoteForDashboard(miniQuote, "presupuesto");
 
   // (Opcional) auto-JSON
   if (AUTO_DOWNLOAD_JSON) {
@@ -329,15 +342,15 @@ async function tryExtractPymeQuote(text) {
     folio: crypto.randomUUID?.() || String(Date.now()),
   };
 
-  // Habilita botón PDF
+  // Habilita botón PDF y guarda
   if (pdfBtn) pdfBtn.disabled = false;
   addMessage(
     "Sistema",
     "✅ Cotización PyME armada. Ya puedes descargar el PDF."
   );
 
-  // Guarda para el botón
   window._lastPyME = quoteResult;
+  saveQuoteForDashboard(quoteResult, "pyme");
 
   // Auto-descarga PDF si está prendido
   if (AUTO_DOWNLOAD_PDF) {
@@ -357,11 +370,6 @@ function sanitizeAssistantReply(text) {
   // Quita bloques con backticks (```json ... ```)
   out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
   // Quita JSON inline con event: presupuesto_ok o pyme_fields_ok
-  out = out.replace(
-    /\{[\s\S]*?"event"\s*:\*"(?:presupuesto_ok|pyme_fields_ok)"[\s\S]*?\}/gi,
-    ""
-  ); // <-- corregido abajo
-  // La expresión anterior tenía un error de escape; la correcta es:
   out = out.replace(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok)"[\s\S]*?\}/gi,
     ""
@@ -431,20 +439,9 @@ async function sendMessage() {
   }
 }
 
-// Botón PDF inteligente (PyME > Presupuesto)
-pdfBtn?.addEventListener("click", async () => {
-  try {
-    if (window._lastPyME) {
-      await descargarPDFPyME(window._lastPyME);
-    } else if (miniQuote) {
-      await descargarPDFPresupuesto();
-    } else {
-      alert("Aún no hay datos confirmados para descargar PDF.");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("No se pudo generar el PDF.");
-  }
+// Botón ENVIAR (click)
+sendBtn?.addEventListener("click", () => {
+  sendMessage();
 });
 
 // Enter para enviar
@@ -672,6 +669,22 @@ async function descargarPDFPyME(quoteResult) {
     py += 16;
   }
 }
+
+// Botón PDF inteligente (PyME > Presupuesto)
+pdfBtn?.addEventListener("click", async () => {
+  try {
+    if (window._lastPyME) {
+      await descargarPDFPyME(window._lastPyME);
+    } else if (miniQuote) {
+      await descargarPDFPresupuesto();
+    } else {
+      alert("Aún no hay datos confirmados para descargar PDF.");
+    }
+  } catch (e) {
+    console.error(e);
+    alert("No se pudo generar el PDF.");
+  }
+});
 
 // ================== Navegación ==================
 backBtn?.addEventListener("click", (e) => {
