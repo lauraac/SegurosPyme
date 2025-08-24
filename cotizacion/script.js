@@ -415,15 +415,39 @@ function downloadJSON(filename, dataObj) {
 // ============= Detección de JSON inline o con backticks =============
 function extractJsonCandidate(text) {
   if (!text) return null;
+
+  // 1) Bloque con backticks ```json ... ```
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1];
 
+  // 2) Si TODA la respuesta es JSON (empieza con { y termina con })
+  const trimmed = String(text).trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  // 3) Busca el mayor bloque {...} que contenga "event" o "pyme_fields_ok"
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    const big = text.slice(start, end + 1);
+    if (/"event"\s*:/.test(big) || /"pyme_fields_ok"\s*:/.test(big)) {
+      return big;
+    }
+  }
+
+  // 4) Patrón inline tradicional
   const inline = text.match(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/i
   );
   if (inline) return inline[0];
 
+  // 5) Mini JSON { "pyme_fields_ok": true }
+  const mini = text.match(/\{[\s\S]*?"pyme_fields_ok"\s*:\s*true[\s\S]*?\}/i);
+  if (mini) return mini[0];
+
   return null;
+}
 }
 
 /**
@@ -488,43 +512,35 @@ async function tryExtractMiniQuote(text) {
 async function tryExtractPymeQuote(text) {
   if (!text) return;
 
-  // 1) { "pyme_fields_ok": true } SIN event
+  // 0) Mini bandera
   if (/"pyme_fields_ok"\s*:\s*true/i.test(text)) {
     const inputObj = buildInputFromState();
-    const hasAnySum =
-      inputObj.sumaContenido ||
-      inputObj.sumaEdificio ||
-      inputObj.sumaValoresCaja ||
-      inputObj.sumaValoresTransito ||
-      inputObj.sumaElectronicos ||
-      inputObj.sumaCristales;
-
+    const hasAnySum = [
+      inputObj.sumaContenido, inputObj.sumaEdificio, inputObj.sumaValoresCaja,
+      inputObj.sumaValoresTransito, inputObj.sumaElectronicos, inputObj.sumaCristales
+    ].some(v => Number(v) > 0);
     if (inputObj.negocioNombre && inputObj.actividadPrincipal && hasAnySum) {
-      processPyMEAndOfferDownload(inputObj, 30);
-      return;
+      await processPyMEAndOfferDownload(inputObj, 30);
+    } else {
+      addMessage("Agente Seguros PyME",
+        "Necesito al menos nombre, actividad y alguna suma para generar el PDF.");
     }
-    addMessage(
-      "Agente Seguros PyME",
-      "Necesito al menos nombre, actividad y alguna suma para generar el PDF."
-    );
     return;
   }
 
-  // 2) elegibilidad mini JSON
+  // 1) Caso no elegible
   if (/"esElegible"\s*:\s*false/i.test(text)) {
-    const m = text.match(/"motivo"\s*:\s*"([^"]+)"/i);
-    const motivo = m ? m[1] : "Requiere evaluación especial.";
-    addMessage(
-      "Agente Seguros PyME",
-      `El giro requiere evaluación especial: ${motivo}`
-    );
+    const m = text.match(/"motivo(NoElegible|)"\s*:\s*"([^"]+)"/i);
+    const motivo = m ? m[2] : "Requiere evaluación especial.";
+    addMessage("Agente Seguros PyME", `El giro requiere evaluación especial: ${motivo}`);
     return;
   }
 
-  // 3) Caso estándar con { "event": "pyme_fields_ok", ... }
+  // 2) Extrae el mejor candidato
   const candidate = extractJsonCandidate(text);
   if (!candidate) return;
 
+  // 3) Parse robusto
   let obj;
   try {
     obj = JSON.parse(candidate.trim());
@@ -536,20 +552,25 @@ async function tryExtractPymeQuote(text) {
       return;
     }
   }
-  if (!obj || obj.event !== "pyme_fields_ok") return;
 
-  if (!obj.elegibilidad?.esElegible) {
-    addMessage(
-      "Agente Seguros PyME",
-      `El giro requiere evaluación especial: ${
-        obj.elegibilidad?.motivoNoElegible || "—"
-      }`
-    );
+  // 4) Cierra
+  if (obj?.event === "pyme_fields_ok") {
+    if (obj.elegibilidad && obj.elegibilidad.esElegible === false) {
+      addMessage("Agente Seguros PyME",
+        `El giro requiere evaluación especial: ${obj.elegibilidad?.motivoNoElegible || "—"}`);
+      return;
+    }
+    await processPyMEAndOfferDownload(obj.input, Number(obj.validezDias || 30));
     return;
   }
 
-  processPyMEAndOfferDownload(obj.input, Number(obj.validezDias || 30));
+  // 5) Fallback: por si el modelo devolvió el objeto crudo en otra forma
+  if (obj?.pyme_fields_ok === true) {
+    const inputObj = buildInputFromState();
+    await processPyMEAndOfferDownload(inputObj, 30);
+  }
 }
+
 
 // Si no llega JSON válido tras “sí”, armamos la cotización con lo capturado
 function buildInputFromState() {
@@ -789,6 +810,19 @@ async function sendMessageInternal(userMessage, withContext = false) {
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
     await tryExtractCotizacionPyMEPDF(data.reply);
+    // Fallback ultra-defensivo: si no se activó nada y la respuesta es JSON válido
+try {
+  if (!window._lastPyME) {
+    const maybe = JSON.parse(String(data.reply).trim());
+    if (maybe?.event === "pyme_fields_ok") {
+      await processPyMEAndOfferDownload(maybe.input, Number(maybe.validezDias || 30));
+    } else if (maybe?.pyme_fields_ok === true) {
+      const inputObj = buildInputFromState();
+      await processPyMEAndOfferDownload(inputObj, 30);
+    }
+  }
+} catch {}
+
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
