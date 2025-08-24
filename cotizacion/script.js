@@ -323,6 +323,51 @@ function tryCaptureAmountFromUserReply(userText) {
     CURRENT_INPUT[field] = normalized;
   }
 }
+function parseBulkPyMEMessage(raw) {
+  const t = String(raw || "");
+  const out = {
+    negocioNombre: null,
+    actividadPrincipal: null,
+    sumaContenido: null,
+    sumaEdificio: null,
+    sumaValoresCaja: null,
+    sumaValoresTransito: null,
+    sumaElectronicos: null,
+    sumaCristales: null,
+  };
+
+  // Nombre
+  let m = t.match(
+    /(?:mi\s+negocio\s+se\s+llama|se\s+llama|nombre\s*[:=])\s*([^\n,]+)/i
+  );
+  if (m) out.negocioNombre = m[1].trim();
+
+  // Actividad
+  m = t.match(/(?:actividad\s*principal\s*[:=]|actividad\s*[:=])\s*([^\n,]+)/i);
+  if (!m)
+    m = t.match(
+      /\b(es|somos|vendo|vendemos|fabricamos|brindo|ofrezco|ofrecemos)\b(.+)/i
+    );
+  if (m) out.actividadPrincipal = (m[2] ? m[1] + " " + m[2] : m[1]).trim();
+
+  // Montos (acepta "Contenido 500000" o "Contenido: 500,000" etc.)
+  const grab = (label) => {
+    const r = new RegExp(label + "\\s*[:=]?\\s*([\\d.,]+)", "i");
+    const mm = t.match(r);
+    if (!mm) return null;
+    const n = Number(String(mm[1]).replace(/\./g, "").replace(/,/g, "."));
+    return isFinite(n) ? n : null;
+  };
+
+  out.sumaContenido = grab("Contenido");
+  out.sumaEdificio = grab("Edificio");
+  out.sumaValoresCaja = grab("Valores?\\s+en\\s+caja");
+  out.sumaValoresTransito = grab("Valores?\\s+en\\s*tr[aá]nsito");
+  out.sumaElectronicos = grab("Electr[oó]nicos?");
+  out.sumaCristales = grab("Cristales?");
+
+  return out;
+}
 
 // ================== Guardado para Panel/Dashboard ==================
 function saveQuoteForDashboard(payload, kind) {
@@ -516,6 +561,13 @@ function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
   // Confirm para descargar ahora
   if (confirm("Cotización lista. ¿Descargar el PDF ahora?")) {
     descargarPDFPyME(quoteResult).catch(console.warn);
+  } else {
+    // Si cancela, dejamos el botón habilitado y avisamos en el chat.
+    if (pdfBtn) pdfBtn.disabled = false;
+    addMessage(
+      "Agente Seguros PyME",
+      "Perfecto. El PDF quedó listo. Puedes descargarlo cuando quieras con el botón **Descargar PDF**."
+    );
   }
 }
 
@@ -524,28 +576,25 @@ function sanitizeAssistantReply(text) {
   if (!text) return "";
   let out = String(text);
 
-  // Quita bloques con backticks (```json ... ```)
+  // 1) Quita bloques con backticks (```json ... ```)
   out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
 
-  // Quita JSON inline con event: presupuesto_ok | pyme_fields_ok | cotizacion_pyme_pdf
-  out = out.replace(
-    /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/gi,
-    ""
-  );
+  // 2) Elimina cualquier fragmento que sea JSON válido (lo detecta y lo borra)
+  //    Así nos llevamos { "pyme_fields_ok": true }, { "esElegible": false, ... }, etc.
+  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, (m) => {
+    try {
+      JSON.parse(m);
+      return "";
+    } catch {
+      return m;
+    }
+  });
 
-  // Quita JSONs "pequeños" de confirmación/elegibilidad que a veces manda el modelo
-  // Ej: { "pyme_fields_ok": true }  |  { "esElegible": false, "motivo": "..." }
-  out = out.replace(
-    /\{\s*"(?:pyme_fields_ok|esElegible|elegibilidad|motivo|ok|status)"[\s\S]*?\}/gi,
-    ""
-  );
+  // 3) Si el mensaje quedó vacío o solo había JSON, no mostramos nada
+  out = out.trim();
+  if (!out) return "";
 
-  // Si el mensaje es SOLO un JSON (sin texto) lo ocultamos por completo
-  if (/^\s*\{[\s\S]*\}\s*$/.test(out.trim())) {
-    out = "";
-  }
-
-  // Limpieza
+  // 4) Limpieza final
   out = out
     .replace(/\s*,\s*(?=[\}\]])/g, "")
     .replace(/(^|\n)\s*,\s*/g, "$1")
@@ -604,10 +653,46 @@ async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // 👇  vuelve a dejar estas dos líneas
-  updateStateFromUser(userMessage);
-  tryCaptureAmountFromUserReply(userMessage);
+  // ➊ Intenta modo “todo en uno”
+  const bulk = parseBulkPyMEMessage(userMessage);
+  const hasAnySum =
+    (bulk.sumaContenido ?? 0) ||
+    (bulk.sumaEdificio ?? 0) ||
+    (bulk.sumaValoresCaja ?? 0) ||
+    (bulk.sumaValoresTransito ?? 0) ||
+    (bulk.sumaElectronicos ?? 0) ||
+    (bulk.sumaCristales ?? 0);
 
+  if (
+    (bulk.negocioNombre || PYME_STATE.negocioNombre) &&
+    (bulk.actividadPrincipal || PYME_STATE.actividadPrincipal) &&
+    hasAnySum
+  ) {
+    // Hidrata estado con lo detectado
+    if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
+    if (bulk.actividadPrincipal)
+      PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
+    savePymeState();
+
+    CURRENT_INPUT.sumaContenido =
+      bulk.sumaContenido ?? CURRENT_INPUT.sumaContenido ?? 0;
+    CURRENT_INPUT.sumaEdificio =
+      bulk.sumaEdificio ?? CURRENT_INPUT.sumaEdificio ?? 0;
+    CURRENT_INPUT.sumaValoresCaja =
+      bulk.sumaValoresCaja ?? CURRENT_INPUT.sumaValoresCaja ?? 0;
+    CURRENT_INPUT.sumaValoresTransito =
+      bulk.sumaValoresTransito ?? CURRENT_INPUT.sumaValoresTransito ?? 0;
+    CURRENT_INPUT.sumaElectronicos =
+      bulk.sumaElectronicos ?? CURRENT_INPUT.sumaElectronicos ?? 0;
+    CURRENT_INPUT.sumaCristales =
+      bulk.sumaCristales ?? CURRENT_INPUT.sumaCristales ?? 0;
+
+    const inputObj = buildInputFromState();
+    // arma y ofrece descarga SIN esperar a que el modelo “confirme”
+    processPyMEAndOfferDownload(inputObj, 30);
+  }
+
+  // ➋ Mantén el flujo normal (historial + envío al backend)
   pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
   input.value = "";
