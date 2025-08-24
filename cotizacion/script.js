@@ -703,71 +703,37 @@ async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // Captura local de montos según la última pregunta
+  // Actualiza estado local (nombre/actividad) y captura montos por última pregunta
+  updateStateFromUser(userMessage);
   tryCaptureAmountFromUserReply(userMessage);
 
-  let skipBackend = false;
+  // Intenta parseo “todo en uno”, pero SOLO para hidratar estado; NO cierra ni genera PDF
+  const bulk = parseBulkPyMEMessage(userMessage);
+  if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
+  if (bulk.actividadPrincipal)
+    PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
+  if (bulk.negocioNombre || bulk.actividadPrincipal) savePymeState();
 
-  // Atajo local: si dice "sí" y ya tenemos todo, cerrar y descargar
-  if (YES_RE.test(userMessage) && hasAllPyMEFields()) {
-    const inputObj = buildInputFromState();
-    await processPyMEAndOfferDownload(inputObj, 30);
-    skipBackend = true;
-  } else {
-    // ➊ Intenta modo “todo en uno”
-    const bulk = parseBulkPyMEMessage(userMessage);
-    const hasAnySum =
-      (bulk.sumaContenido ?? 0) ||
-      (bulk.sumaEdificio ?? 0) ||
-      (bulk.sumaValoresCaja ?? 0) ||
-      (bulk.sumaValoresTransito ?? 0) ||
-      (bulk.sumaElectronicos ?? 0) ||
-      (bulk.sumaCristales ?? 0);
+  if (bulk.sumaContenido != null)
+    CURRENT_INPUT.sumaContenido = bulk.sumaContenido;
+  if (bulk.sumaEdificio != null) CURRENT_INPUT.sumaEdificio = bulk.sumaEdificio;
+  if (bulk.sumaValoresCaja != null)
+    CURRENT_INPUT.sumaValoresCaja = bulk.sumaValoresCaja;
+  if (bulk.sumaValoresTransito != null)
+    CURRENT_INPUT.sumaValoresTransito = bulk.sumaValoresTransito;
+  if (bulk.sumaElectronicos != null)
+    CURRENT_INPUT.sumaElectronicos = bulk.sumaElectronicos;
+  if (bulk.sumaCristales != null)
+    CURRENT_INPUT.sumaCristales = bulk.sumaCristales;
 
-    if (
-      (bulk.negocioNombre || PYME_STATE.negocioNombre) &&
-      (bulk.actividadPrincipal || PYME_STATE.actividadPrincipal) &&
-      hasAnySum
-    ) {
-      // hidrata estado
-      if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
-      if (bulk.actividadPrincipal)
-        PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
-      savePymeState();
-
-      CURRENT_INPUT.sumaContenido =
-        bulk.sumaContenido ?? CURRENT_INPUT.sumaContenido ?? 0;
-      CURRENT_INPUT.sumaEdificio =
-        bulk.sumaEdificio ?? CURRENT_INPUT.sumaEdificio ?? 0;
-      CURRENT_INPUT.sumaValoresCaja =
-        bulk.sumaValoresCaja ?? CURRENT_INPUT.sumaValoresCaja ?? 0;
-      CURRENT_INPUT.sumaValoresTransito =
-        bulk.sumaValoresTransito ?? CURRENT_INPUT.sumaValoresTransito ?? 0;
-      CURRENT_INPUT.sumaElectronicos =
-        bulk.sumaElectronicos ?? CURRENT_INPUT.sumaElectronicos ?? 0;
-      CURRENT_INPUT.sumaCristales =
-        bulk.sumaCristales ?? CURRENT_INPUT.sumaCristales ?? 0;
-
-      const inputObj = buildInputFromState();
-
-      // arma y descarga SIN esperar confirmación del modelo
-      await processPyMEAndOfferDownload(inputObj, 30);
-
-      // si ya generaste PDF, no tiene sentido mandar este turno al backend
-      skipBackend = true;
-    }
-  }
-
-  // pinta tu mensaje
+  // Pinta tu mensaje
   pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
   input.value = "";
   input.focus();
 
-  // ➋ si no hiciste la cotización local, recién manda al backend
-  if (!skipBackend) {
-    await sendMessageInternal(userMessage, /*withCtx*/ true);
-  }
+  // Siempre manda al backend; no cierres localmente
+  await sendMessageInternal(userMessage, /*withCtx*/ true);
 }
 
 // Enviar al backend con opción de contexto
@@ -797,6 +763,7 @@ async function sendMessageInternal(userMessage, withContext = false) {
       throw new Error("La API no devolvió JSON (revisa CORS o la URL).");
 
     const data = JSON.parse(raw);
+    console.log("RAW REPLY >>>", data.reply);
 
     if (data.status === "running") {
       THREAD_ID = data.threadId;
