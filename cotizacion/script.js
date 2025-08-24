@@ -495,6 +495,43 @@ async function tryExtractMiniQuote(text) {
  * Arma 3 planes, guarda y (opcional) descarga PDF tras confirm().
  */
 async function tryExtractPymeQuote(text) {
+  if (!text) return;
+
+  // 1) Si viene el "mini JSON" { "pyme_fields_ok": true } SIN event
+  if (/"pyme_fields_ok"\s*:\s*true/i.test(text)) {
+    const inputObj = buildInputFromState();
+    const hasAnySum =
+      inputObj.sumaContenido ||
+      inputObj.sumaEdificio ||
+      inputObj.sumaValoresCaja ||
+      inputObj.sumaValoresTransito ||
+      inputObj.sumaElectronicos ||
+      inputObj.sumaCristales;
+
+    if (inputObj.negocioNombre && inputObj.actividadPrincipal && hasAnySum) {
+      processPyMEAndOfferDownload(inputObj, 30);
+      return;
+    }
+    // Si no hay datos suficientes, solo avisa amable
+    addMessage(
+      "Agente Seguros PyME",
+      "Necesito al menos nombre, actividad y alguna suma para generar el PDF."
+    );
+    return;
+  }
+
+  // 2) Si viene elegibilidad en mini JSON
+  if (/"esElegible"\s*:\s*false/i.test(text)) {
+    const m = text.match(/"motivo"\s*:\s*"([^"]+)"/i);
+    const motivo = m ? m[1] : "Requiere evaluación especial.";
+    addMessage(
+      "Agente Seguros PyME",
+      `El giro requiere evaluación especial: ${motivo}`
+    );
+    return;
+  }
+
+  // 3) Caso estándar con { "event": "pyme_fields_ok", ... }
   const candidate = extractJsonCandidate(text);
   if (!candidate) return;
 
@@ -539,7 +576,7 @@ function buildInputFromState() {
   };
 }
 
-function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
+async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
   const planes = buildPlansFromInput(inputObj);
   const quoteResult = {
     input: inputObj,
@@ -558,16 +595,28 @@ function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
   window._lastPyME = quoteResult;
   saveQuoteForDashboard(quoteResult, "pyme");
 
-  // Confirm para descargar ahora
-  if (confirm("Cotización lista. ¿Descargar el PDF ahora?")) {
-    descargarPDFPyME(quoteResult).catch(console.warn);
+  if (AUTO_DOWNLOAD_PDF) {
+    try {
+      await descargarPDFPyME(quoteResult);
+      addMessage("Agente Seguros PyME", "📄 PDF generado y descargado.");
+    } catch (e) {
+      console.warn(e);
+      addMessage(
+        "Agente Seguros PyME",
+        "No se pudo descargar automático. Usa el botón **Descargar PDF**."
+      );
+      if (pdfBtn) pdfBtn.disabled = false;
+    }
   } else {
-    // Si cancela, dejamos el botón habilitado y avisamos en el chat.
-    if (pdfBtn) pdfBtn.disabled = false;
-    addMessage(
-      "Agente Seguros PyME",
-      "Perfecto. El PDF quedó listo. Puedes descargarlo cuando quieras con el botón **Descargar PDF**."
-    );
+    if (confirm("Cotización lista. ¿Descargar el PDF ahora?")) {
+      descargarPDFPyME(quoteResult).catch(console.warn);
+    } else {
+      if (pdfBtn) pdfBtn.disabled = false;
+      addMessage(
+        "Agente Seguros PyME",
+        "Perfecto. El PDF quedó listo. Puedes descargarlo con el botón **Descargar PDF**."
+      );
+    }
   }
 }
 
@@ -663,12 +712,14 @@ async function sendMessage() {
     (bulk.sumaElectronicos ?? 0) ||
     (bulk.sumaCristales ?? 0);
 
+  let skipBackend = false;
+
   if (
     (bulk.negocioNombre || PYME_STATE.negocioNombre) &&
     (bulk.actividadPrincipal || PYME_STATE.actividadPrincipal) &&
     hasAnySum
   ) {
-    // Hidrata estado con lo detectado
+    // hidrata estado
     if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
     if (bulk.actividadPrincipal)
       PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
@@ -688,17 +739,24 @@ async function sendMessage() {
       bulk.sumaCristales ?? CURRENT_INPUT.sumaCristales ?? 0;
 
     const inputObj = buildInputFromState();
-    // arma y ofrece descarga SIN esperar a que el modelo “confirme”
-    processPyMEAndOfferDownload(inputObj, 30);
+
+    // arma y descarga SIN esperar confirmación del modelo
+    await processPyMEAndOfferDownload(inputObj, 30);
+
+    // si ya generaste PDF, no tiene sentido mandar este turno al backend
+    skipBackend = true;
   }
 
-  // ➋ Mantén el flujo normal (historial + envío al backend)
+  // pinta tu mensaje
   pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
   input.value = "";
   input.focus();
 
-  await sendMessageInternal(userMessage, /*withCtx*/ true);
+  // ➋ si no hiciste la cotización local, recién manda al backend
+  if (!skipBackend) {
+    await sendMessageInternal(userMessage, /*withCtx*/ true);
+  }
 }
 
 // Enviar al backend con opción de contexto
