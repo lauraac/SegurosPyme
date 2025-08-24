@@ -526,9 +526,10 @@ function sanitizeAssistantReply(text) {
 
   // Quita bloques con backticks (```json ... ```)
   out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
-  // Quita JSON inline con event: presupuesto_ok o pyme_fields_ok
+
+  // Quita JSON inline con event: presupuesto_ok, pyme_fields_ok o cotizacion_pyme_pdf
   out = out.replace(
-    /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok)"[\s\S]*?\}/gi,
+    /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/gi,
     ""
   );
 
@@ -585,31 +586,6 @@ async function tryExtractCotizacionPyMEPDF(text) {
 
 // ====== Anti-loop suave: si repite un campo ya dado, lo re-afirma y empuja ======
 let antiLoopGuardCount = 0;
-async function recoverIfStuck(assistantShownText) {
-  if (!assistantShownText) return;
-  if (antiLoopGuardCount >= 3) return;
-
-  LAST_QUESTION = assistantShownText || LAST_QUESTION; // guarda última pregunta
-  const asksName =
-    /¿cu[aá]l\s+es\s+el\s+nombre\s+del\s+negocio|ind[íi]came\s+el\s+nombre\s+del\s+negocio|nombre\s+del\s+negocio\?/i.test(
-      assistantShownText
-    );
-  const asksAct = /actividad\s+principal/i.test(assistantShownText);
-
-  if (asksName && PYME_STATE.negocioNombre) {
-    antiLoopGuardCount++;
-    const msg = `El nombre del negocio es: ${PYME_STATE.negocioNombre}. Por favor, continúa con la Actividad Principal.`;
-    addMessage("Tú", msg);
-    input.value = "";
-    await sendMessageInternal(msg, /*withCtx*/ true);
-  } else if (asksAct && PYME_STATE.actividadPrincipal) {
-    antiLoopGuardCount++;
-    const msg = `La actividad principal es: ${PYME_STATE.actividadPrincipal}. Continúa con los valores: Contenido, Edificio (si aplica), Valores en caja, Valores en tránsito, Electrónicos y Cristales.`;
-    addMessage("Tú", msg);
-    input.value = "";
-    await sendMessageInternal(msg, /*withCtx*/ true);
-  }
-}
 
 // ================== Envío de mensaje ==================
 async function sendMessage() {
@@ -690,7 +666,6 @@ async function sendMessageInternal(userMessage, withContext = false) {
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
-      await recoverIfStuck(shown);
 
       // Captura la "última pregunta" para mapear el siguiente número
       LAST_QUESTION = shown;
@@ -1176,7 +1151,6 @@ async function pollThread(tid) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
       LAST_QUESTION = shown; // para mapear el siguiente número
-      await recoverIfStuck(shown);
     }
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
