@@ -623,13 +623,18 @@ async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
 // Oculta bloques ```...``` e inline JSON del mensaje mostrado y limpia comas
 function sanitizeAssistantReply(text) {
   if (!text) return "";
-  let out = String(text);
+  let out = String(text).trim();
+
+  // 0) Si la respuesta es SOLO un JSON válido -> ocultar completamente
+  try {
+    const maybe = JSON.parse(out);
+    if (maybe && typeof maybe === "object") return "";
+  } catch {}
 
   // 1) Quita bloques con backticks (```json ... ```)
   out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
 
-  // 2) Elimina cualquier fragmento que sea JSON válido (lo detecta y lo borra)
-  //    Así nos llevamos { "pyme_fields_ok": true }, { "esElegible": false, ... }, etc.
+  // 2) Quita cualquier JSON "inline" válido dentro del texto
   out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, (m) => {
     try {
       JSON.parse(m);
@@ -639,13 +644,12 @@ function sanitizeAssistantReply(text) {
     }
   });
 
-  // 3) Si el mensaje quedó vacío o solo había JSON, no mostramos nada
-  out = out.trim();
-  if (!out) return "";
+  // 3) Extra: limpia mini-JSONs no 100% estándar que a veces manda el modelo
+  out = out.replace(/\{\s*"?pyme_fields_ok"?\s*:\s*(true|false)\s*\}/gi, "");
 
-  // 4) Limpieza final
+  // Limpieza final
   out = out
-    .replace(/\s*,\s*(?=[\}\]])/g, "")
+    .replace(/\s*,\s*(?=[}\]])/g, "")
     .replace(/(^|\n)\s*,\s*/g, "$1")
     .replace(/\n{2,}/g, "\n")
     .trim();
@@ -806,14 +810,8 @@ async function sendMessageInternal(userMessage, withContext = false) {
       // Captura la "última pregunta" para mapear el siguiente número
       LAST_QUESTION = shown;
     } else {
-      // Si solo vino JSON (oculto), mostramos cierre amigable
-      addMessage(
-        "Agente Seguros PyME",
-        "✅ Tu cotización está lista. El PDF se ha generado y puedes descargarlo desde el botón si lo prefieres."
-      );
-      pushHistory("assistant", "Cotización lista. PDF generado (JSON oculto).");
+      // Si solo vino JSON, no mostramos nada (ya informamos con el mensaje del Sistema).
     }
-
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
