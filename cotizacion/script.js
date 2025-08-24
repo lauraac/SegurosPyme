@@ -345,39 +345,26 @@ function addMessage(sender, text) {
 /* ============= Parser robusto de JSON en la reply ============= */
 function extractJsonCandidate(text) {
   if (!text) return null;
-  // 1) Bloque con backticks
   const fenced = String(text).match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1];
-
   const s = String(text).trim();
-
-  // 2) Si toda la respuesta es JSON
   if (s.startsWith("{") && s.endsWith("}")) return s;
-
-  // 3) Mayor bloque {...} que contenga "event" o "pyme_fields_ok"
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start !== -1 && end !== -1 && end > start) {
     const big = s.slice(start, end + 1);
     if (/"event"\s*:/.test(big) || /"pyme_fields_ok"\s*:/.test(big)) return big;
   }
-
-  // 4) Patrón inline tradicional
   const inline = s.match(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/i
   );
   if (inline) return inline[0];
-
-  // 5) Mini JSON
   const mini = s.match(/\{[\s\S]*?"pyme_fields_ok"\s*:\s*true[\s\S]*?\}/i);
   if (mini) return mini[0];
-
   return null;
 }
 function parseReplyObject(reply) {
-  // si ya es objeto
   if (reply && typeof reply === "object") return reply;
-  // si es string, intenta extraer/parsear
   const candidate = extractJsonCandidate(String(reply));
   if (!candidate) return null;
   try {
@@ -389,6 +376,42 @@ function parseReplyObject(reply) {
     } catch {
       return null;
     }
+  }
+}
+
+/* ============= GENERA PDF y activa botón (FALTABA) ============= */
+async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
+  const planes = buildPlansFromInput(inputObj);
+  const quoteResult = {
+    input: inputObj,
+    planes,
+    validezDias: Number(validezDias || 30),
+    fecha: new Date().toISOString().slice(0, 10),
+    folio: crypto.randomUUID?.() || String(Date.now()),
+  };
+
+  // habilita botón y guarda
+  if (pdfBtn) pdfBtn.disabled = false;
+  addMessage(
+    "Sistema",
+    "✅ Cotización PyME armada. Ya puedes descargar el PDF."
+  );
+  window._lastPyME = quoteResult;
+  saveQuoteForDashboard(quoteResult, "pyme");
+
+  if (AUTO_DOWNLOAD_PDF) {
+    try {
+      await descargarPDFPyME(quoteResult);
+      addMessage("Agente Seguros PyME", "📄 PDF generado y descargado.");
+    } catch (e) {
+      console.warn(e);
+      addMessage(
+        "Agente Seguros PyME",
+        "No se pudo descargar automático. Usa el botón **Descargar PDF**."
+      );
+      if (pdfBtn) pdfBtn.disabled = false;
+    }
+  }
 }
 
 /* ============= Flujo presupuesto (legacy) ============= */
@@ -442,7 +465,6 @@ async function tryExtractPymeQuote(text) {
   const obj = parseReplyObject(text);
   if (!obj) return;
 
-  // { "pyme_fields_ok": true }
   if (obj.pyme_fields_ok === true) {
     const inputObj = buildInputFromState();
     const hasAnySum = [
@@ -519,10 +541,10 @@ function buildInputFromState() {
 function sanitizeAssistantReply(text) {
   if (!text) return "";
   let out = String(text);
-  out = out.replace(/```[\s\S]*?```/g, ""); // quita bloques con backticks
-  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, ""); // quita objetos
-  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, ""); // quita arrays
-  out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, ""); // líneas tipo JSON
+  out = out.replace(/```[\s\S]*?```/g, "");
+  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, "");
+  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, "");
+  out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, "");
   const hasLetters = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(out);
   if (!hasLetters) return "";
   return out
@@ -602,7 +624,6 @@ async function sendMessageInternal(userMessage, withContext = false) {
     THREAD_ID = data.threadId;
     localStorage.setItem(threadKey(), THREAD_ID);
 
-    // Mostrar sin JSON
     const shown = sanitizeAssistantReply(data.reply);
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
@@ -610,12 +631,10 @@ async function sendMessageInternal(userMessage, withContext = false) {
       LAST_QUESTION = shown;
     }
 
-    // Procesar JSON (cualquiera de los 3 flujos)
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
     await tryExtractCotizacionPyMEPDF(data.reply);
 
-    // Fallback: si el modelo devolvió OBJETO puro (sin fences) y aún no se generó
     if (!window._lastPyME) {
       const parsed = parseReplyObject(data.reply);
       if (parsed?.event === "pyme_fields_ok") {
@@ -693,10 +712,11 @@ async function descargarPDFPresupuesto() {
 
   doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
-  if (logoDataUrl)
+  if (logoDataUrl) {
     try {
       doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
     } catch {}
+  }
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
@@ -1048,9 +1068,8 @@ async function pollThread(tid) {
     });
 
     const ctype = res.headers.get("content-type") || "";
-    if (!res.ok || !ctype.includes("application/json")) {
+    if (!res.ok || !ctype.includes("application/json"))
       throw new Error(await res.text());
-    }
     const data = await res.json();
 
     if (data.status === "running") {
