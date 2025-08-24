@@ -194,6 +194,49 @@ function pushHistory(role, content) {
 function clearHistory() {
   localStorage.removeItem(HKEY);
 }
+function resetConversationState() {
+  try {
+    // Borra hilos e historial ligero
+    localStorage.removeItem(threadKey());
+    localStorage.removeItem("threadId"); // legacy
+    clearHistory();
+
+    // Borra estado PyME persistido
+    const KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+    localStorage.removeItem(KEY);
+
+    // Limpia últimos guardados (solo locales)
+    try {
+      const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
+      // Si quieres que NO quede en Dashboard, descomenta esta línea:
+      // localStorage.removeItem(LKEY);
+    } catch {}
+  } catch (e) {
+    console.warn("resetConversationState storage:", e);
+  }
+
+  // ---- Variables en RAM ----
+  THREAD_ID = null;
+  PYME_STATE = {}; // se rehidratará vacío
+  LAST_QUESTION = "";
+  antiLoopGuardCount = 0;
+  miniQuote = null;
+  window._lastPyME = null;
+
+  // Reinicia capturas de montos
+  CURRENT_INPUT.sumaContenido = null;
+  CURRENT_INPUT.sumaEdificio = null;
+  CURRENT_INPUT.sumaValoresCaja = null;
+  CURRENT_INPUT.sumaValoresTransito = null;
+  CURRENT_INPUT.sumaElectronicos = null;
+  CURRENT_INPUT.sumaCristales = null;
+
+  // UI
+  if (messagesEl) messagesEl.innerHTML = "";
+  if (pdfBtn) pdfBtn.disabled = true;
+
+  input?.focus();
+}
 
 // ===== HOTFIX Estado PyME + captura de montos por pregunta =====
 const PYME_STATE_KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
@@ -1071,13 +1114,18 @@ backBtn?.addEventListener("click", (e) => {
 });
 
 logoutBtn?.addEventListener("click", () => {
+  // 🔹 Limpia identidad de usuario
   localStorage.removeItem("userName");
   localStorage.removeItem("userCompany");
-  localStorage.removeItem(threadKey());
-  localStorage.removeItem("threadId"); // legacy
-  clearHistory();
+
+  // 🔹 Limpia conversación y estado PyME
+  resetConversationState();
+
+  // 🔹 Limpia sesiones
   sessionStorage.clear();
   window.location.href = BASE;
+
+  // 🔹 Si quieres que también borre la última cotización del Dashboard
   try {
     const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
     localStorage.removeItem(KEY);
@@ -1086,10 +1134,11 @@ logoutBtn?.addEventListener("click", () => {
 
 // ================== Reiniciar conversación ==================
 document.getElementById("new-quote")?.addEventListener("click", () => {
-  localStorage.removeItem(threadKey());
-  localStorage.removeItem("threadId"); // legacy
-  clearHistory();
-  location.reload();
+  resetConversationState();
+  addMessage(
+    "Sistema",
+    "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización PyME"
+  );
 });
 
 // ================== Polling ==================
