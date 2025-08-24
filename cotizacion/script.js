@@ -1,8 +1,8 @@
-// ================== Config rápido ==================
+/* ================== Config rápido ================== */
 const AUTO_DOWNLOAD_PDF = true;
-const AUTO_DOWNLOAD_JSON = false; // (opcional) Auto-descargar JSON al confirmar
+const AUTO_DOWNLOAD_JSON = false;
 
-// ================== UI ==================
+/* ================== UI ================== */
 const input = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
 const messagesEl = document.getElementById("messages");
@@ -10,7 +10,7 @@ const pdfBtn = document.getElementById("pdf-btn");
 const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
-// ================== Utils ==================
+/* ================== Utils ================== */
 function slug(s) {
   return String(s || "")
     .trim()
@@ -28,10 +28,10 @@ const BASE = location.hostname.endsWith("github.io")
   ? `/${location.pathname.split("/")[1]}/`
   : "/";
 
-// ================== Dónde está la API (FIJO a tu Vercel) ==================
+/* ================== Dónde está la API ================== */
 const API_URL = "https://seguros-pyme-api.vercel.app/api/chat";
 
-// Helpers
+/* Helpers */
 function getParam(n) {
   return new URLSearchParams(location.search).get(n);
 }
@@ -52,7 +52,7 @@ function prettyDate(d) {
   return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
 
-// ======= TARIFAS Y COBERTURAS (EJEMPLO: reemplaza con tus números del doc) =======
+/* ======= TARIFAS Y COBERTURAS (demo) ======= */
 const COBERTURAS = {
   CONT: {
     clave: "CONT",
@@ -91,35 +91,24 @@ const COBERTURAS = {
     tarifa: 0.0012,
   },
 };
-
-// Qué coberturas entran en cada plan (ajusta según tu documento “punto 4”)
 const PLANES = {
-  Base: (c, actividad) => c.obligatoria === true,
-  Medio: (c, actividad) => c.obligatoria === true,
+  Base: (c) => c.obligatoria === true,
+  Medio: (c) => c.obligatoria === true,
   Plus: (c, actividad) => c.obligatoria === true || aplicaExtra(c, actividad),
 };
-
-// Lógica extra por giro (ejemplo: para restaurantes incluir Cristales y Electrónicos)
-function aplicaExtra(cobertura, actividad) {
+function aplicaExtra(c, actividad) {
   const act = String(actividad || "").toLowerCase();
-  if (act.includes("restaurante"))
-    return ["CRIS", "ELEC"].includes(cobertura.clave);
+  if (act.includes("restaurante")) return ["CRIS", "ELEC"].includes(c.clave);
   return false;
 }
-
-// Fórmula del punto 5 (ajústala si tu doc tiene otra)
-function computePremium(sumasPorCobertura) {
-  const primaNeta = sumasPorCobertura.reduce(
-    (acc, i) => acc + i.suma * i.tarifa,
-    0
-  );
-  const gastosExpedicion = 150; // ejemplo
-  const derechos = 0; // ajusta si aplica
+function computePremium(items) {
+  const primaNeta = items.reduce((acc, i) => acc + i.suma * i.tarifa, 0);
+  const gastosExpedicion = 150;
+  const derechos = 0;
   const iva = (primaNeta + gastosExpedicion + derechos) * 0.16;
   const primaTotal = primaNeta + gastosExpedicion + derechos + iva;
   return { primaNeta, gastosExpedicion, derechos, iva, primaTotal };
 }
-
 function buildPlansFromInput(input) {
   const mapa = {
     CONT: Number(input.sumaContenido || 0),
@@ -130,13 +119,11 @@ function buildPlansFromInput(input) {
     CRIS: Number(input.sumaCristales || 0),
   };
   const cobList = Object.values(COBERTURAS);
-
   function makePlan(nombre) {
     const filtra = PLANES[nombre];
     const seleccion = cobList
       .filter((c) => filtra(c, input.actividadPrincipal))
       .filter((c) => (mapa[c.clave] || 0) > 0);
-
     const detalle = seleccion.map((c) => ({
       clave: c.clave,
       descripcion: c.descripcion,
@@ -144,40 +131,35 @@ function buildPlansFromInput(input) {
       tarifa: c.tarifa,
       prima: mapa[c.clave] * c.tarifa,
     }));
-
     const totales = computePremium(
       detalle.map((d) => ({ suma: d.suma, tarifa: d.tarifa }))
     );
     return { nombrePlan: nombre, coberturas: detalle, ...totales };
   }
-
   return [makePlan("Base"), makePlan("Medio"), makePlan("Plus")];
 }
 
-// ================== Sesión usuario (DINÁMICA) ==================
+/* ================== Sesión ================== */
 const qName = getParam("name");
 const qCompany = getParam("company");
 const USER_NAME = qName ?? localStorage.getItem("userName");
 const USER_COMPANY = qCompany ?? localStorage.getItem("userCompany");
-
 if (!USER_NAME || !USER_COMPANY) {
   window.location.href = "../index.html";
   throw new Error("Sin sesión");
 }
 if (qName) localStorage.setItem("userName", USER_NAME);
 if (qCompany) localStorage.setItem("userCompany", USER_COMPANY);
-
-// 🔒 Aísla el thread por usuario/empresa
 function threadKey() {
   return `sp:thread:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
 }
 
-// ================== Estado ==================
+/* ================== Estado ================== */
 let THREAD_ID = localStorage.getItem(threadKey()) || null;
-let miniQuote = null; // { event:"presupuesto_ok", ... }
+let miniQuote = null;
 if (pdfBtn) pdfBtn.disabled = true;
 
-// ================== Historial (memoria ligera) ==================
+/* ================== Historial ================== */
 const HKEY = `sp:history:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
 function getHistory() {
   try {
@@ -196,48 +178,31 @@ function clearHistory() {
 }
 function resetConversationState() {
   try {
-    // Borra hilos e historial ligero
     localStorage.removeItem(threadKey());
-    localStorage.removeItem("threadId"); // legacy
+    localStorage.removeItem("threadId");
     clearHistory();
-
-    // Borra estado PyME persistido
     const KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
     localStorage.removeItem(KEY);
-
-    // Limpia últimos guardados (solo locales)
-    try {
-      const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
-      // localStorage.removeItem(LKEY);
-    } catch {}
-  } catch (e) {
-    console.warn("resetConversationState storage:", e);
-  }
-
-  // ---- Variables en RAM ----
+  } catch {}
   THREAD_ID = null;
-  PYME_STATE = {}; // se rehidratará vacío
+  PYME_STATE = {};
   LAST_QUESTION = "";
-  antiLoopGuardCount = 0;
   miniQuote = null;
   window._lastPyME = null;
-
-  // Reinicia capturas de montos
-  CURRENT_INPUT.sumaContenido = null;
-  CURRENT_INPUT.sumaEdificio = null;
-  CURRENT_INPUT.sumaValoresCaja = null;
-  CURRENT_INPUT.sumaValoresTransito = null;
-  CURRENT_INPUT.sumaElectronicos = null;
-  CURRENT_INPUT.sumaCristales = null;
-
-  // UI
+  CURRENT_INPUT = {
+    sumaContenido: null,
+    sumaEdificio: null,
+    sumaValoresCaja: null,
+    sumaValoresTransito: null,
+    sumaElectronicos: null,
+    sumaCristales: null,
+  };
   if (messagesEl) messagesEl.innerHTML = "";
   if (pdfBtn) pdfBtn.disabled = true;
-
   input?.focus();
 }
 
-// ===== HOTFIX Estado PyME + captura de montos por pregunta =====
+/* ===== HOTFIX Estado PyME + captura de montos por pregunta ===== */
 const PYME_STATE_KEY = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
 let PYME_STATE = (() => {
   try {
@@ -253,22 +218,16 @@ function savePymeState() {
 }
 function updateStateFromUser(text) {
   const t = String(text || "").trim();
-
-  // Nombre (solo explícito)
-  const m1 = t.match(
+  let m = t.match(
     /(?:mi\s+negocio\s+se\s+llama|se\s+llama|nombre\s*[:=])\s+(.+)/i
   );
-  if (m1 && !PYME_STATE.negocioNombre) {
-    PYME_STATE.negocioNombre = m1[1].trim().replace(/[."”]+$/, "");
+  if (m && !PYME_STATE.negocioNombre) {
+    PYME_STATE.negocioNombre = m[1].trim().replace(/[."”]+$/, "");
     savePymeState();
   }
-
-  // Actividad principal
-  const m2 = t.match(
-    /(?:actividad\s*principal\s*[:=]|actividad\s*[:=])\s+(.+)/i
-  );
-  if (m2 && !PYME_STATE.actividadPrincipal) {
-    PYME_STATE.actividadPrincipal = m2[1].trim().replace(/[."”]+$/, "");
+  m = t.match(/(?:actividad\s*principal\s*[:=]|actividad\s*[:=])\s+(.+)/i);
+  if (m && !PYME_STATE.actividadPrincipal) {
+    PYME_STATE.actividadPrincipal = m[1].trim().replace(/[."”]+$/, "");
     savePymeState();
   } else if (
     /^(es|somos|vendo|vendemos|fabricamos|brindo|ofrezco|ofrecemos)\b/i.test(
@@ -289,9 +248,9 @@ function buildShortContext() {
   return parts.length ? `[[Contexto conocido]]\n${parts.join("\n")}\n\n` : "";
 }
 
-// Captura de montos por pregunta
-let LAST_QUESTION = ""; // última pregunta del bot
-const CURRENT_INPUT = {
+/* Captura de montos por pregunta */
+let LAST_QUESTION = "";
+let CURRENT_INPUT = {
   sumaContenido: null,
   sumaEdificio: null,
   sumaValoresCaja: null,
@@ -299,7 +258,6 @@ const CURRENT_INPUT = {
   sumaElectronicos: null,
   sumaCristales: null,
 };
-
 function mapQuestionToField(q) {
   const t = (q || "").toLowerCase();
   if (/contenido/.test(t)) return "sumaContenido";
@@ -315,11 +273,8 @@ function tryCaptureAmountFromUserReply(userText) {
   if (!clean) return null;
   const normalized = Number(clean.replace(/\./g, "").replace(/,/g, "."));
   if (!isFinite(normalized)) return null;
-
   const field = mapQuestionToField(LAST_QUESTION);
-  if (field) {
-    CURRENT_INPUT[field] = normalized;
-  }
+  if (field) CURRENT_INPUT[field] = normalized;
 }
 function parseBulkPyMEMessage(raw) {
   const t = String(raw || "");
@@ -333,22 +288,16 @@ function parseBulkPyMEMessage(raw) {
     sumaElectronicos: null,
     sumaCristales: null,
   };
-
-  // Nombre
   let m = t.match(
     /(?:mi\s+negocio\s+se\s+llama|se\s+llama|nombre\s*[:=])\s*([^\n,]+)/i
   );
   if (m) out.negocioNombre = m[1].trim();
-
-  // Actividad
   m = t.match(/(?:actividad\s*principal\s*[:=]|actividad\s*[:=])\s*([^\n,]+)/i);
   if (!m)
     m = t.match(
       /\b(es|somos|vendo|vendemos|fabricamos|brindo|ofrezco|ofrecemos)\b(.+)/i
     );
   if (m) out.actividadPrincipal = (m[2] ? m[1] + " " + m[2] : m[1]).trim();
-
-  // Montos
   const grab = (label) => {
     const r = new RegExp(label + "\\s*[:=]?\\s*([\\d.,]+)", "i");
     const mm = t.match(r);
@@ -356,18 +305,16 @@ function parseBulkPyMEMessage(raw) {
     const n = Number(String(mm[1]).replace(/\./g, "").replace(/,/g, "."));
     return isFinite(n) ? n : null;
   };
-
   out.sumaContenido = grab("Contenido");
   out.sumaEdificio = grab("Edificio");
   out.sumaValoresCaja = grab("Valores?\\s+en\\s+caja");
   out.sumaValoresTransito = grab("Valores?\\s+en\\s*tr[aá]nsito");
   out.sumaElectronicos = grab("Electr[oó]nicos?");
   out.sumaCristales = grab("Cristales?");
-
   return out;
 }
 
-// ================== Guardado para Panel/Dashboard ==================
+/* ================== Guardado para Panel ================== */
 function saveQuoteForDashboard(payload, kind) {
   const wrapped = {
     kind,
@@ -379,13 +326,13 @@ function saveQuoteForDashboard(payload, kind) {
   try {
     const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
     localStorage.setItem(LKEY, JSON.stringify(wrapped));
-    localStorage.setItem("lastQuote", JSON.stringify(wrapped)); // compat
+    localStorage.setItem("lastQuote", JSON.stringify(wrapped));
   } catch (e) {
     console.warn("No se pudo persistir la cotización:", e);
   }
 }
 
-// ================== Chat helpers ==================
+/* ================== Chat helpers ================== */
 function addMessage(sender, text) {
   if (!text) return;
   const div = document.createElement("div");
@@ -395,84 +342,63 @@ function addMessage(sender, text) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// Descarga JSON (opcional)
-function downloadJSON(filename, dataObj) {
-  try {
-    const blob = new Blob([JSON.stringify(dataObj, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    console.warn("No se pudo descargar JSON:", e);
-  }
-}
-
-// ============= Detección de JSON inline o con backticks =============
+/* ============= Parser robusto de JSON en la reply ============= */
 function extractJsonCandidate(text) {
   if (!text) return null;
-
-  // 1) Bloque con backticks ```json ... ```
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  // 1) Bloque con backticks
+  const fenced = String(text).match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1];
 
-  // 2) Si TODA la respuesta es JSON (empieza con { y termina con })
-  const trimmed = String(text).trim();
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    return trimmed;
-  }
+  const s = String(text).trim();
 
-  // 3) Busca el mayor bloque {...} que contenga "event" o "pyme_fields_ok"
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
+  // 2) Si toda la respuesta es JSON
+  if (s.startsWith("{") && s.endsWith("}")) return s;
+
+  // 3) Mayor bloque {...} que contenga "event" o "pyme_fields_ok"
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
   if (start !== -1 && end !== -1 && end > start) {
-    const big = text.slice(start, end + 1);
-    if (/"event"\s*:/.test(big) || /"pyme_fields_ok"\s*:/.test(big)) {
-      return big;
-    }
+    const big = s.slice(start, end + 1);
+    if (/"event"\s*:/.test(big) || /"pyme_fields_ok"\s*:/.test(big)) return big;
   }
 
   // 4) Patrón inline tradicional
-  const inline = text.match(
+  const inline = s.match(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/i
   );
   if (inline) return inline[0];
 
-  // 5) Mini JSON { "pyme_fields_ok": true }
-  const mini = text.match(/\{[\s\S]*?"pyme_fields_ok"\s*:\s*true[\s\S]*?\}/i);
+  // 5) Mini JSON
+  const mini = s.match(/\{[\s\S]*?"pyme_fields_ok"\s*:\s*true[\s\S]*?\}/i);
   if (mini) return mini[0];
 
   return null;
 }
-}
-
-/**
- * Mini-JSON del flujo antiguo (presupuesto_ok)
- */
-async function tryExtractMiniQuote(text) {
-  const candidate = extractJsonCandidate(text);
-  if (!candidate) return;
-
-  let obj;
+function parseReplyObject(reply) {
+  // si ya es objeto
+  if (reply && typeof reply === "object") return reply;
+  // si es string, intenta extraer/parsear
+  const candidate = extractJsonCandidate(String(reply));
+  if (!candidate) return null;
   try {
-    obj = JSON.parse(candidate.trim());
+    return JSON.parse(candidate.trim());
   } catch {
     try {
       const fixed = candidate.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
-      obj = JSON.parse(fixed);
+      return JSON.parse(fixed);
     } catch {
-      return;
+      return null;
     }
   }
+}
+
+/* ============= Flujo presupuesto (legacy) ============= */
+async function tryExtractMiniQuote(text) {
+  const obj = parseReplyObject(text);
   if (!obj || obj.event !== "presupuesto_ok") return;
 
   miniQuote = obj;
 
-  // Historial (máx 10)
   const KEY = quotesKey(USER_NAME, USER_COMPANY);
   const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
   let arr = [];
@@ -482,7 +408,6 @@ async function tryExtractMiniQuote(text) {
   arr = [enriched, ...arr].slice(0, 10);
   localStorage.setItem(KEY, JSON.stringify(arr));
 
-  // Habilita PDF + guarda formato unificado para Panel
   if (pdfBtn) pdfBtn.disabled = false;
   addMessage(
     "Sistema",
@@ -494,10 +419,17 @@ async function tryExtractMiniQuote(text) {
     const filename = `Presupuesto_${slug(
       miniQuote.cliente || USER_NAME || "cliente"
     )}.json`;
-    downloadJSON(filename, miniQuote);
+    const blob = new Blob([JSON.stringify(miniQuote, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
-  if (confirm("Presupuesto listo. ¿Descargar el PDF ahora?")) {
+  if (AUTO_DOWNLOAD_PDF) {
     try {
       await descargarPDFPresupuesto();
     } catch (e) {
@@ -506,73 +438,71 @@ async function tryExtractMiniQuote(text) {
   }
 }
 
-/**
- * JSON del flujo PyME (pyme_fields_ok)
- */
+/* ============= Flujo PyME (pyme_fields_ok) ============= */
 async function tryExtractPymeQuote(text) {
-  if (!text) return;
+  const obj = parseReplyObject(text);
+  if (!obj) return;
 
-  // 0) Mini bandera
-  if (/"pyme_fields_ok"\s*:\s*true/i.test(text)) {
+  // { "pyme_fields_ok": true }
+  if (obj.pyme_fields_ok === true) {
     const inputObj = buildInputFromState();
     const hasAnySum = [
-      inputObj.sumaContenido, inputObj.sumaEdificio, inputObj.sumaValoresCaja,
-      inputObj.sumaValoresTransito, inputObj.sumaElectronicos, inputObj.sumaCristales
-    ].some(v => Number(v) > 0);
+      inputObj.sumaContenido,
+      inputObj.sumaEdificio,
+      inputObj.sumaValoresCaja,
+      inputObj.sumaValoresTransito,
+      inputObj.sumaElectronicos,
+      inputObj.sumaCristales,
+    ].some((v) => Number(v) > 0);
     if (inputObj.negocioNombre && inputObj.actividadPrincipal && hasAnySum) {
       await processPyMEAndOfferDownload(inputObj, 30);
     } else {
-      addMessage("Agente Seguros PyME",
-        "Necesito al menos nombre, actividad y alguna suma para generar el PDF.");
+      addMessage(
+        "Agente Seguros PyME",
+        "Necesito al menos nombre, actividad y alguna suma para generar el PDF."
+      );
     }
     return;
   }
 
-  // 1) Caso no elegible
-  if (/"esElegible"\s*:\s*false/i.test(text)) {
-    const m = text.match(/"motivo(NoElegible|)"\s*:\s*"([^"]+)"/i);
-    const motivo = m ? m[2] : "Requiere evaluación especial.";
-    addMessage("Agente Seguros PyME", `El giro requiere evaluación especial: ${motivo}`);
-    return;
-  }
-
-  // 2) Extrae el mejor candidato
-  const candidate = extractJsonCandidate(text);
-  if (!candidate) return;
-
-  // 3) Parse robusto
-  let obj;
-  try {
-    obj = JSON.parse(candidate.trim());
-  } catch {
-    try {
-      const fixed = candidate.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
-      obj = JSON.parse(fixed);
-    } catch {
-      return;
-    }
-  }
-
-  // 4) Cierra
-  if (obj?.event === "pyme_fields_ok") {
+  if (obj.event === "pyme_fields_ok") {
     if (obj.elegibilidad && obj.elegibilidad.esElegible === false) {
-      addMessage("Agente Seguros PyME",
-        `El giro requiere evaluación especial: ${obj.elegibilidad?.motivoNoElegible || "—"}`);
+      addMessage(
+        "Agente Seguros PyME",
+        `El giro requiere evaluación especial: ${
+          obj.elegibilidad?.motivoNoElegible || "—"
+        }`
+      );
       return;
     }
     await processPyMEAndOfferDownload(obj.input, Number(obj.validezDias || 30));
-    return;
-  }
-
-  // 5) Fallback: por si el modelo devolvió el objeto crudo en otra forma
-  if (obj?.pyme_fields_ok === true) {
-    const inputObj = buildInputFromState();
-    await processPyMEAndOfferDownload(inputObj, 30);
   }
 }
 
+/* ============= Flujo plantilla Lia opcional ============= */
+async function tryExtractCotizacionPyMEPDF(text) {
+  const obj = parseReplyObject(text);
+  if (!obj || obj.event !== "cotizacion_pyme_pdf") return;
 
-// Si no llega JSON válido tras “sí”, armamos la cotización con lo capturado
+  const wrapped = {
+    kind: "pyme_pdf",
+    data: obj,
+    user: USER_NAME,
+    company: USER_COMPANY,
+    createdAt: new Date().toISOString(),
+  };
+  saveQuoteForDashboard(wrapped, "pyme_pdf");
+
+  if (pdfBtn) pdfBtn.disabled = false;
+  addMessage("Sistema", "✅ Cotización generada. Descargando PDF…");
+  try {
+    await descargarPDFPlantillaLia(obj);
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+/* ===== util ===== */
 function buildInputFromState() {
   return {
     negocioNombre: PYME_STATE.negocioNombre || "",
@@ -586,155 +516,35 @@ function buildInputFromState() {
   };
 }
 
-// 🔎 util: ¿ya tengo todo para cerrar localmente?
-function hasAllPyMEFields() {
-  const k = buildInputFromState();
-  const hasAnySum =
-    k.sumaContenido ||
-    k.sumaEdificio ||
-    k.sumaValoresCaja ||
-    k.sumaValoresTransito ||
-    k.sumaElectronicos ||
-    k.sumaCristales;
-
-  return Boolean(k.negocioNombre && k.actividadPrincipal && hasAnySum);
-}
-const YES_RE =
-  /\b(s[ií]|si|ok|okay|de acuerdo|acepto|aceptar|listo|correcto)\b/i;
-
-async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
-  const planes = buildPlansFromInput(inputObj);
-  const quoteResult = {
-    input: inputObj,
-    planes,
-    validezDias: Number(validezDias || 30),
-    fecha: new Date().toISOString().slice(0, 10),
-    folio: crypto.randomUUID?.() || String(Date.now()),
-  };
-
-  // Habilita botón PDF y guarda
-  if (pdfBtn) pdfBtn.disabled = false;
-  addMessage(
-    "Sistema",
-    "✅ Cotización PyME armada. Ya puedes descargar el PDF."
-  );
-  window._lastPyME = quoteResult;
-  saveQuoteForDashboard(quoteResult, "pyme");
-
-  if (AUTO_DOWNLOAD_PDF) {
-    try {
-      await descargarPDFPyME(quoteResult);
-      addMessage("Agente Seguros PyME", "📄 PDF generado y descargado.");
-    } catch (e) {
-      console.warn(e);
-      addMessage(
-        "Agente Seguros PyME",
-        "No se pudo descargar automático. Usa el botón **Descargar PDF**."
-      );
-      if (pdfBtn) pdfBtn.disabled = false;
-    }
-  } else {
-    if (confirm("Cotización lista. ¿Descargar el PDF ahora?")) {
-      descargarPDFPyME(quoteResult).catch(console.warn);
-    } else {
-      if (pdfBtn) pdfBtn.disabled = false;
-      addMessage(
-        "Agente Seguros PyME",
-        "Perfecto. El PDF quedó listo. Puedes descargarlo con el botón **Descargar PDF**."
-      );
-    }
-  }
-}
-
-// Oculta bloques ```...``` e inline JSON del mensaje mostrado y limpia comas
+/* ============= Sanitiza para mostrar sin JSON ============= */
 function sanitizeAssistantReply(text) {
   if (!text) return "";
   let out = String(text);
-
-  // Quitar bloques con backticks
-  out = out.replace(/```[\s\S]*?```/g, "");
-
-  // Quitar objetos/arrays balanceados
-  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, "");
-  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, "");
-
-  // Quitar líneas sueltas tipo JSON:  "clave": valor
-  out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, "");
-
-  // Quitar claves comunes colgantes
-  out = out.replace(
-    /(^|\n)\s*(pyme_fields_ok|elegibilidad|esElegible|validezDias|input|planes)\s*[:=][^\n]*(?=\n|$)/gim,
-    ""
-  );
-
-  // Si no quedan letras, no muestres nada
+  out = out.replace(/```[\s\S]*?```/g, ""); // quita bloques con backticks
+  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, ""); // quita objetos
+  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, ""); // quita arrays
+  out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, ""); // líneas tipo JSON
   const hasLetters = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(out);
   if (!hasLetters) return "";
-
   return out
     .replace(/[{}\[\]]/g, "")
     .replace(/\n{2,}/g, "\n")
     .trim();
 }
 
-async function tryExtractCotizacionPyMEPDF(text) {
-  const candidate = extractJsonCandidate(text);
-  if (!candidate) return;
-
-  let obj;
-  try {
-    obj = JSON.parse(candidate.trim());
-  } catch {
-    try {
-      const fixed = candidate.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
-      obj = JSON.parse(fixed);
-    } catch {
-      return;
-    }
-  }
-  if (!obj || obj.event !== "cotizacion_pyme_pdf") return;
-
-  // Guarda para Dashboard
-  const wrapped = {
-    kind: "pyme_pdf",
-    data: obj,
-    user: USER_NAME,
-    company: USER_COMPANY,
-    createdAt: new Date().toISOString(),
-  };
-  saveQuoteForDashboard(wrapped, "pyme_pdf");
-
-  // Habilita botón y descarga automática
-  if (pdfBtn) pdfBtn.disabled = false;
-  addMessage("Sistema", "✅ Cotización generada. Descargando PDF…");
-  try {
-    await descargarPDFPlantillaLia(obj);
-  } catch (e) {
-    console.warn(e);
-  } finally {
-    if (pdfBtn) pdfBtn.disabled = false;
-  }
-}
-
-// ====== Anti-loop suave: si repite un campo ya dado, lo re-afirma y empuja ======
-let antiLoopGuardCount = 0;
-
-// ================== Envío de mensaje ==================
+/* ================== Envío de mensaje ================== */
 async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // Actualiza estado local (nombre/actividad) y captura montos por última pregunta
   updateStateFromUser(userMessage);
   tryCaptureAmountFromUserReply(userMessage);
 
-  // Intenta parseo “todo en uno”, pero SOLO para hidratar estado; NO cierra ni genera PDF
   const bulk = parseBulkPyMEMessage(userMessage);
   if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
   if (bulk.actividadPrincipal)
     PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
   if (bulk.negocioNombre || bulk.actividadPrincipal) savePymeState();
-
   if (bulk.sumaContenido != null)
     CURRENT_INPUT.sumaContenido = bulk.sumaContenido;
   if (bulk.sumaEdificio != null) CURRENT_INPUT.sumaEdificio = bulk.sumaEdificio;
@@ -747,17 +557,15 @@ async function sendMessage() {
   if (bulk.sumaCristales != null)
     CURRENT_INPUT.sumaCristales = bulk.sumaCristales;
 
-  // Pinta tu mensaje
   pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
   input.value = "";
   input.focus();
 
-  // Siempre manda al backend; no cierres localmente
-  await sendMessageInternal(userMessage, /*withCtx*/ true);
+  await sendMessageInternal(userMessage, true);
 }
 
-// Enviar al backend con opción de contexto
+/* ================== Enviar al backend ================== */
 async function sendMessageInternal(userMessage, withContext = false) {
   try {
     const payloadMsg = withContext
@@ -778,7 +586,6 @@ async function sendMessageInternal(userMessage, withContext = false) {
 
     const ctype = res.headers.get("content-type") || "";
     const raw = await res.text();
-
     if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
     if (!ctype.includes("application/json"))
       throw new Error("La API no devolvió JSON (revisa CORS o la URL).");
@@ -796,45 +603,40 @@ async function sendMessageInternal(userMessage, withContext = false) {
     THREAD_ID = data.threadId;
     localStorage.setItem(threadKey(), THREAD_ID);
 
-    // Pinta el mensaje SIN el JSON
+    // Mostrar sin JSON
     const shown = sanitizeAssistantReply(data.reply);
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
-      LAST_QUESTION = shown; // para mapear la siguiente cifra
-    } else {
-      // Si solo vino JSON, no mostramos nada; los extractores disparan el PDF.
+      LAST_QUESTION = shown;
     }
 
-    // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
+    // Procesar JSON (cualquiera de los 3 flujos)
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
     await tryExtractCotizacionPyMEPDF(data.reply);
-    // Fallback ultra-defensivo: si no se activó nada y la respuesta es JSON válido
-try {
-  if (!window._lastPyME) {
-    const maybe = JSON.parse(String(data.reply).trim());
-    if (maybe?.event === "pyme_fields_ok") {
-      await processPyMEAndOfferDownload(maybe.input, Number(maybe.validezDias || 30));
-    } else if (maybe?.pyme_fields_ok === true) {
-      const inputObj = buildInputFromState();
-      await processPyMEAndOfferDownload(inputObj, 30);
-    }
-  }
-} catch {}
 
+    // Fallback: si el modelo devolvió OBJETO puro (sin fences) y aún no se generó
+    if (!window._lastPyME) {
+      const parsed = parseReplyObject(data.reply);
+      if (parsed?.event === "pyme_fields_ok") {
+        await processPyMEAndOfferDownload(
+          parsed.input,
+          Number(parsed.validezDias || 30)
+        );
+      } else if (parsed?.pyme_fields_ok === true) {
+        const inputObj = buildInputFromState();
+        await processPyMEAndOfferDownload(inputObj, 30);
+      }
+    }
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
   }
 }
 
-// Botón ENVIAR (click)
-sendBtn?.addEventListener("click", () => {
-  sendMessage();
-});
-
-// Enter para enviar
+/* ================== Listeners ================== */
+sendBtn?.addEventListener("click", () => sendMessage());
 input?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -842,68 +644,82 @@ input?.addEventListener("keydown", (e) => {
   }
 });
 
-// ================== PDF ==================
+/* ================== PDF ================== */
+async function ensureJsPDF() {
+  if (window.jspdf?.jsPDF) return true;
+  try {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return !!window.jspdf?.jsPDF;
+  } catch {
+    return false;
+  }
+}
+
 async function descargarPDFPresupuesto() {
   if (!miniQuote) {
     alert("Aún no confirmas el presupuesto en el chat.");
     return;
   }
-  if (!window.jspdf?.jsPDF) {
-    alert("Falta jsPDF. Agrega el CDN en el HTML.");
+  if (!(await ensureJsPDF())) {
+    alert("Falta jsPDF.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Logo
   const logoUrl = `${BASE}img/pdf.png?v=2`;
   let logoDataUrl = null;
   try {
-    logoDataUrl = await urlToDataURL(logoUrl);
-  } catch (e) {
-    console.warn("Logo no disponible:", e.message);
-  }
+    const res = await fetch(logoUrl, { cache: "no-store" });
+    if (
+      res.ok &&
+      (res.headers.get("content-type") || "").startsWith("image/")
+    ) {
+      const blob = await res.blob();
+      logoDataUrl = await new Promise((resolve, reject) => {
+        const rd = new FileReader();
+        rd.onload = () => resolve(rd.result);
+        rd.onerror = reject;
+        rd.readAsDataURL(blob);
+      });
+    }
+  } catch {}
 
-  // Header
   doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
-  if (logoDataUrl) {
+  if (logoDataUrl)
     try {
       doc.addImage(logoDataUrl, "PNG", 40, 20, 50, 50);
-    } catch (e) {
-      console.warn("addImage falló:", e.message);
-    }
-  }
+    } catch {}
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.text("SegurosPyme • Presupuesto", 110, 55);
 
-  // Contenido
   doc.setTextColor(34, 40, 49);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-
   let y = 130;
   putKV("Cliente", miniQuote.cliente || USER_NAME || "—");
   putKV("Fecha objetivo", prettyDate(miniQuote.fecha) || "—");
   if (miniQuote.detalle) putKV("Detalle", miniQuote.detalle);
-
-  // Caja de precio
   y += 10;
   doc.setDrawColor(100, 75, 243);
   doc.setFillColor(246, 245, 255);
   doc.roundedRect(40, y, 515, 90, 8, 8, "FD");
-
   const monto = miniQuote.precio?.monto ?? 0;
   const moneda = (miniQuote.precio?.moneda || "").toUpperCase();
   doc.setFont("helvetica", "bold");
   doc.setTextColor(100, 75, 243);
   doc.setFontSize(26);
   doc.text(`TOTAL: ${money(monto)} ${moneda}`.trim(), 60, y + 58);
-
-  // Footer
   doc.setTextColor(120);
   doc.setFontSize(10);
   doc.text(
@@ -929,30 +745,14 @@ async function descargarPDFPresupuesto() {
   }
 }
 
-// URL → DataURL para jsPDF
-async function urlToDataURL(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const type = res.headers.get("content-type") || "";
-  if (!type.startsWith("image/")) throw new Error(`No es imagen: ${type}`);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const rd = new FileReader();
-    rd.onload = () => resolve(rd.result);
-    rd.onerror = reject;
-    rd.readAsDataURL(blob);
-  });
-}
-
 async function descargarPDFPyME(quoteResult) {
-  if (!window.jspdf?.jsPDF) {
-    alert("Falta jsPDF. Agrega el CDN en el HTML.");
+  if (!(await ensureJsPDF())) {
+    alert("Falta jsPDF.");
     return;
   }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Encabezado
   doc.setFillColor(100, 75, 243);
   doc.rect(0, 0, 595, 90, "F");
   doc.setTextColor(255, 255, 255);
@@ -960,21 +760,18 @@ async function descargarPDFPyME(quoteResult) {
   doc.setFontSize(20);
   doc.text("SegurosPyme • Cotización PyME", 40, 55);
 
-  // Datos
   doc.setTextColor(34, 40, 49);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
 
   const { input, planes, fecha, validezDias } = quoteResult;
   let y = 120;
-
   putKV("Fecha", prettyDate(fecha));
   putKV("Validez", `${validezDias} días`);
   putKV("Negocio", input.negocioNombre || "—");
   putKV("Actividad", input.actividadPrincipal || "—");
 
   y += 8;
-  // Resumen Sumas
   doc.setDrawColor(100, 75, 243);
   doc.setFillColor(246, 245, 255);
   doc.roundedRect(40, y, 515, 120, 8, 8, "FD");
@@ -986,7 +783,6 @@ async function descargarPDFPyME(quoteResult) {
   putRow("Electrónicos", input.sumaElectronicos);
   putRow("Cristales", input.sumaCristales);
 
-  // Cada plan en páginas separadas
   planes.forEach((p) => {
     doc.addPage();
     doc.setFont("helvetica", "bold");
@@ -994,14 +790,12 @@ async function descargarPDFPyME(quoteResult) {
     doc.setTextColor(34, 40, 49);
     doc.text(`Plan ${p.nombrePlan}`, 40, 60);
 
-    // Tabla coberturas
     let y2 = 90;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     doc.text("Coberturas:", 40, y2);
     y2 += 12;
 
-    // Header
     doc.setFont("helvetica", "bold");
     doc.text("Cobertura", 40, y2);
     doc.text("Suma (MXN)", 260, y2);
@@ -1038,11 +832,9 @@ async function descargarPDFPyME(quoteResult) {
     }
   });
 
-  // Guardar
   const fname = `Cotizacion_PyME_${slug(input.negocioNombre || "negocio")}.pdf`;
   doc.save(fname);
 
-  // Helpers internos
   function putKV(k, v) {
     doc.setFont("helvetica", "normal");
     doc.text(`${k}:`, 40, y);
@@ -1061,14 +853,13 @@ async function descargarPDFPyME(quoteResult) {
 }
 
 async function descargarPDFPlantillaLia(payload) {
-  if (!window.jspdf?.jsPDF) {
-    alert("Falta jsPDF. Agrega el CDN en el HTML.");
+  if (!(await ensureJsPDF())) {
+    alert("Falta jsPDF.");
     return;
   }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  // Header
   doc.setFillColor(104, 79, 243);
   doc.rect(0, 0, 595, 90, "F");
   doc.setTextColor(255, 255, 255);
@@ -1089,7 +880,6 @@ async function descargarPDFPlantillaLia(payload) {
     60
   );
 
-  // Agente / Empresa
   doc.setTextColor(34, 40, 49);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -1104,7 +894,6 @@ async function descargarPDFPlantillaLia(payload) {
   doc.setFontSize(10);
   doc.text(payload?.empresa?.domicilio || "", 320, 142);
 
-  // Tabla de coberturas
   const startY = 180;
   const colX = { tipo: 40, cob: 160, base: 360, medio: 430, plus: 500 };
   const rowH = 24;
@@ -1129,7 +918,6 @@ async function descargarPDFPlantillaLia(payload) {
   drawHeader();
 
   let y = startY + 6;
-
   const filas = [
     {
       tipo: "Cobertura base",
@@ -1152,7 +940,6 @@ async function descargarPDFPlantillaLia(payload) {
       ],
     },
   ];
-
   const inPlan = (plan, label) =>
     Array.isArray(payload?.planes?.[plan]) &&
     payload.planes[plan].includes(label);
@@ -1170,7 +957,6 @@ async function descargarPDFPlantillaLia(payload) {
     y += rowH;
   });
 
-  // Precios
   y += 10;
   doc.setFont("helvetica", "bold");
   doc.text("PRECIO", 40, y);
@@ -1185,7 +971,6 @@ async function descargarPDFPlantillaLia(payload) {
   doc.text("$", colX.plus - 15, y);
   doc.text(fmt(p.plus || {}), colX.plus, y);
 
-  // Validez
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(
@@ -1202,7 +987,7 @@ async function descargarPDFPlantillaLia(payload) {
   doc.save(fname);
 }
 
-// Botón PDF inteligente (PyME > Presupuesto)
+/* ================== Botón PDF ================== */
 pdfBtn?.addEventListener("click", async () => {
   try {
     if (window._lastPyME) {
@@ -1218,7 +1003,7 @@ pdfBtn?.addEventListener("click", async () => {
   }
 });
 
-// ================== Navegación ==================
+/* ================== Navegación ================== */
 backBtn?.addEventListener("click", (e) => {
   e.preventDefault();
   const target = `../Dashboard/index.html?name=${encodeURIComponent(
@@ -1226,27 +1011,19 @@ backBtn?.addEventListener("click", (e) => {
   )}&company=${encodeURIComponent(USER_COMPANY)}`;
   window.location.href = target;
 });
-
 logoutBtn?.addEventListener("click", () => {
-  // 🔹 Limpia identidad de usuario
   localStorage.removeItem("userName");
   localStorage.removeItem("userCompany");
-
-  // 🔹 Limpia conversación y estado PyME
   resetConversationState();
-
-  // 🔹 Limpia sesiones
   sessionStorage.clear();
   window.location.href = BASE;
-
-  // 🔹 (opcional) borra última cotización del Dashboard
   try {
     const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
     localStorage.removeItem(KEY);
   } catch {}
 });
 
-// ================== Reiniciar conversación ==================
+/* ================== Reiniciar conversación ================== */
 document.getElementById("new-quote")?.addEventListener("click", () => {
   resetConversationState();
   addMessage(
@@ -1255,7 +1032,7 @@ document.getElementById("new-quote")?.addEventListener("click", () => {
   );
 });
 
-// ================== Polling ==================
+/* ================== Polling ================== */
 async function pollThread(tid) {
   try {
     const res = await fetch(API_URL, {
@@ -1292,12 +1069,10 @@ async function pollThread(tid) {
       LAST_QUESTION = shown;
     }
 
-    // Procesa posibles JSONs
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
     await tryExtractCotizacionPyMEPDF(data.reply);
 
-    // Si solo vino JSON (y lo ocultamos), muestra cierre amable
     if (!shown) {
       addMessage(
         "Agente Seguros PyME",
