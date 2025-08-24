@@ -389,7 +389,6 @@ function parseReplyObject(reply) {
     } catch {
       return null;
     }
-  }
 }
 
 /* ============= Flujo presupuesto (legacy) ============= */
