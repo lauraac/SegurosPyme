@@ -1,5 +1,5 @@
 // ================== Config rápido ==================
-const AUTO_DOWNLOAD_PDF = false; // ahora usamos confirm() al final
+const AUTO_DOWNLOAD_PDF = true;
 const AUTO_DOWNLOAD_JSON = false; // (opcional) Auto-descargar JSON al confirmar
 
 // ================== UI ==================
@@ -499,6 +499,47 @@ function sanitizeAssistantReply(text) {
   return out;
 }
 
+async function tryExtractCotizacionPyMEPDF(text) {
+  const candidate = extractJsonCandidate(text);
+  if (!candidate) return;
+
+  let obj;
+  try {
+    obj = JSON.parse(candidate.trim());
+  } catch {
+    try {
+      const fixed = candidate.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
+      obj = JSON.parse(fixed);
+    } catch {
+      return;
+    }
+  }
+  if (!obj || obj.event !== "cotizacion_pyme_pdf") return;
+
+  // Guarda para Dashboard
+  const wrapped = {
+    kind: "pyme_pdf",
+    data: obj,
+    user: USER_NAME,
+    company: USER_COMPANY,
+    createdAt: new Date().toISOString(),
+  };
+  saveQuoteForDashboard(wrapped, "pyme_pdf"); // reutiliza tu función
+
+  // Habilita botón y descarga automática
+  if (pdfBtn) pdfBtn.disabled = false;
+  addMessage("Sistema", "✅ Cotización generada. Descargando PDF…");
+  try {
+    await descargarPDFPlantillaLia(obj);
+  } catch (e) {
+    console.warn(e);
+  } finally {
+    // Si el usuario cancela la descarga del navegador,
+    // el botón quedará habilitado para que pueda descargar manualmente.
+    if (pdfBtn) pdfBtn.disabled = false;
+  }
+}
+
 // ====== Anti-loop suave: si repite un campo ya dado, lo re-afirma y empuja ======
 let antiLoopGuardCount = 0;
 async function recoverIfStuck(assistantShownText) {
@@ -618,6 +659,7 @@ async function sendMessageInternal(userMessage, withContext = false) {
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
+    await tryExtractCotizacionPyMEPDF(data.reply);
   } catch (err) {
     console.error(err);
     addMessage("Sistema", `⚠️ ${err.message}`);
@@ -853,6 +895,154 @@ async function descargarPDFPyME(quoteResult) {
     doc.text(money(v || 0), 240, py);
     py += 16;
   }
+}
+
+async function descargarPDFPlantillaLia(payload) {
+  if (!window.jspdf?.jsPDF) {
+    alert("Falta jsPDF. Agrega el CDN en el HTML.");
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+  // Header
+  doc.setFillColor(104, 79, 243);
+  doc.rect(0, 0, 595, 90, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.text("COTIZACIÓN", 440, 55, { align: "right" });
+
+  doc.setFontSize(10);
+  doc.text(`N°. ${payload.folio || "-"}`, 40, 30);
+  doc.text("FECHA COTIZACIÓN", 40, 46);
+  doc.text(
+    String(
+      prettyDate(
+        payload.fechaCotizacion || new Date().toISOString().slice(0, 10)
+      )
+    ),
+    40,
+    60
+  );
+
+  // Agente / Empresa
+  doc.setTextColor(34, 40, 49);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("AGENTE", 40, 110);
+  doc.text("EMPRESA", 320, 110);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(payload?.agente?.nombre || "Lia", 40, 126);
+  doc.text(payload?.empresa?.nombre || "-", 320, 126);
+
+  doc.setFontSize(10);
+  doc.text(payload?.empresa?.domicilio || "", 320, 142);
+
+  // Tabla de coberturas
+  const startY = 180;
+  const colX = { tipo: 40, cob: 160, base: 360, medio: 430, plus: 500 };
+  const rowH = 24;
+
+  function drawCellText(text, x, y, bold = false) {
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.text(String(text), x, y);
+  }
+  function drawHeader() {
+    doc.setFillColor(104, 79, 243);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(40, startY - 20, 515, 24, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Tipo de cobertura", colX.tipo, startY - 4);
+    doc.text("Cobertura", colX.cob, startY - 4);
+    doc.text("Plan\nBase", colX.base, startY - 4);
+    doc.text("Plan\nMedio", colX.medio, startY - 4);
+    doc.text("Plan\nPlus", colX.plus, startY - 4);
+    doc.setTextColor(34, 40, 49);
+  }
+  drawHeader();
+
+  let y = startY + 6;
+
+  const filas = [
+    {
+      tipo: "Cobertura base",
+      items: [
+        "Incendio edificio y contenidos",
+        "Responsabilidad Civil",
+        "Gastos de limpieza y remoción de escombros",
+        "Robo",
+      ],
+    },
+    {
+      tipo: "Coberturas adicionales",
+      items: [
+        "Robo de valores (en caja y tránsito)",
+        "Pérdida de beneficios",
+        "Equipos electrónicos",
+        "Daños eléctricos",
+        "Daños por agua",
+        "Cristales (por m²)",
+      ],
+    },
+  ];
+
+  const inPlan = (plan, label) =>
+    Array.isArray(payload?.planes?.[plan]) &&
+    payload.planes[plan].includes(label);
+  const check = "X";
+
+  filas.forEach((grupo) => {
+    // Encabezado del tipo (celda alta)
+    drawCellText(grupo.tipo, colX.tipo, y, true);
+    grupo.items.forEach((lab, idx) => {
+      if (idx === 0) {
+        // primera fila ya usa el “tipo”
+      } else {
+        // siguiente renglón del mismo grupo
+        y += rowH;
+      }
+      drawCellText(lab, colX.cob, y);
+      drawCellText(inPlan("base", lab) ? check : "", colX.base, y);
+      drawCellText(inPlan("medio", lab) ? check : "", colX.medio, y);
+      drawCellText(inPlan("plus", lab) ? check : "", colX.plus, y);
+    });
+    y += rowH; // espaciado entre grupos
+  });
+
+  // Precios
+  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.text("PRECIO", 40, y);
+  doc.setFont("helvetica", "normal");
+  y += 18;
+  const p = payload.precios || {};
+  const fmt = (m) => money(m?.monto || 0) + " " + (m?.moneda || "MXN");
+  doc.text("$", colX.base - 15, y);
+  doc.text(fmt(p.base || {}), colX.base, y);
+  doc.text("$", colX.medio - 15, y);
+  doc.text(fmt(p.medio || {}), colX.medio, y);
+  doc.text("$", colX.plus - 15, y);
+  doc.text(fmt(p.plus || {}), colX.plus, y);
+
+  // Validez
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(
+    `ESTA COTIZACIÓN TIENE UNA VIGENCIA DE ${
+      payload.validezDias || 30
+    } DÍAS A PARTIR DE LA ENTREGA`,
+    40,
+    770 - 40
+  );
+
+  const fname = `Cotizacion_PyME_${slug(
+    payload?.empresa?.nombre || "empresa"
+  )}.pdf`;
+  doc.save(fname);
 }
 
 // Botón PDF inteligente (PyME > Presupuesto)
