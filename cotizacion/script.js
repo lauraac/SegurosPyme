@@ -208,7 +208,6 @@ function resetConversationState() {
     // Limpia últimos guardados (solo locales)
     try {
       const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
-      // Si quieres que NO quede en Dashboard, descomenta esta línea:
       // localStorage.removeItem(LKEY);
     } catch {}
   } catch (e) {
@@ -314,7 +313,6 @@ function mapQuestionToField(q) {
 function tryCaptureAmountFromUserReply(userText) {
   const clean = String(userText || "").replace(/[^\d.,]/g, "");
   if (!clean) return null;
-  // Normaliza 1.200.000,50 -> 1200000.50 ; 1200000 -> 1200000
   const normalized = Number(clean.replace(/\./g, "").replace(/,/g, "."));
   if (!isFinite(normalized)) return null;
 
@@ -350,7 +348,7 @@ function parseBulkPyMEMessage(raw) {
     );
   if (m) out.actividadPrincipal = (m[2] ? m[1] + " " + m[2] : m[1]).trim();
 
-  // Montos (acepta "Contenido 500000" o "Contenido: 500,000" etc.)
+  // Montos
   const grab = (label) => {
     const r = new RegExp(label + "\\s*[:=]?\\s*([\\d.,]+)", "i");
     const mm = t.match(r);
@@ -371,7 +369,6 @@ function parseBulkPyMEMessage(raw) {
 
 // ================== Guardado para Panel/Dashboard ==================
 function saveQuoteForDashboard(payload, kind) {
-  // kind: "presupuesto" | "pyme"
   const wrapped = {
     kind,
     data: payload,
@@ -421,7 +418,6 @@ function extractJsonCandidate(text) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1];
 
-  // 👇 añade cotizacion_pyme_pdf al alternado
   const inline = text.match(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/i
   );
@@ -432,7 +428,6 @@ function extractJsonCandidate(text) {
 
 /**
  * Mini-JSON del flujo antiguo (presupuesto_ok)
- * Habilita PDF simple, guarda historial y autodispara descargas si aplica.
  */
 async function tryExtractMiniQuote(text) {
   const candidate = extractJsonCandidate(text);
@@ -449,15 +444,13 @@ async function tryExtractMiniQuote(text) {
       return;
     }
   }
-
   if (!obj || obj.event !== "presupuesto_ok") return;
 
   miniQuote = obj;
 
-  // Guardar historial (máx 10 por usuario/empresa)
+  // Historial (máx 10)
   const KEY = quotesKey(USER_NAME, USER_COMPANY);
   const enriched = { ...miniQuote, createdAt: new Date().toISOString() };
-
   let arr = [];
   try {
     arr = JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -473,7 +466,6 @@ async function tryExtractMiniQuote(text) {
   );
   saveQuoteForDashboard(miniQuote, "presupuesto");
 
-  // Confirm para descargar ahora
   if (AUTO_DOWNLOAD_JSON) {
     const filename = `Presupuesto_${slug(
       miniQuote.cliente || USER_NAME || "cliente"
@@ -492,12 +484,11 @@ async function tryExtractMiniQuote(text) {
 
 /**
  * JSON del flujo PyME (pyme_fields_ok)
- * Arma 3 planes, guarda y (opcional) descarga PDF tras confirm().
  */
 async function tryExtractPymeQuote(text) {
   if (!text) return;
 
-  // 1) Si viene el "mini JSON" { "pyme_fields_ok": true } SIN event
+  // 1) { "pyme_fields_ok": true } SIN event
   if (/"pyme_fields_ok"\s*:\s*true/i.test(text)) {
     const inputObj = buildInputFromState();
     const hasAnySum =
@@ -512,7 +503,6 @@ async function tryExtractPymeQuote(text) {
       processPyMEAndOfferDownload(inputObj, 30);
       return;
     }
-    // Si no hay datos suficientes, solo avisa amable
     addMessage(
       "Agente Seguros PyME",
       "Necesito al menos nombre, actividad y alguna suma para generar el PDF."
@@ -520,7 +510,7 @@ async function tryExtractPymeQuote(text) {
     return;
   }
 
-  // 2) Si viene elegibilidad en mini JSON
+  // 2) elegibilidad mini JSON
   if (/"esElegible"\s*:\s*false/i.test(text)) {
     const m = text.match(/"motivo"\s*:\s*"([^"]+)"/i);
     const motivo = m ? m[1] : "Requiere evaluación especial.";
@@ -546,7 +536,6 @@ async function tryExtractPymeQuote(text) {
       return;
     }
   }
-
   if (!obj || obj.event !== "pyme_fields_ok") return;
 
   if (!obj.elegibilidad?.esElegible) {
@@ -575,6 +564,22 @@ function buildInputFromState() {
     sumaCristales: Number(CURRENT_INPUT.sumaCristales || 0),
   };
 }
+
+// 🔎 util: ¿ya tengo todo para cerrar localmente?
+function hasAllPyMEFields() {
+  const k = buildInputFromState();
+  const hasAnySum =
+    k.sumaContenido ||
+    k.sumaEdificio ||
+    k.sumaValoresCaja ||
+    k.sumaValoresTransito ||
+    k.sumaElectronicos ||
+    k.sumaCristales;
+
+  return Boolean(k.negocioNombre && k.actividadPrincipal && hasAnySum);
+}
+const YES_RE =
+  /\b(s[ií]|si|ok|okay|de acuerdo|acepto|aceptar|listo|correcto)\b/i;
 
 async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
   const planes = buildPlansFromInput(inputObj);
@@ -625,30 +630,30 @@ function sanitizeAssistantReply(text) {
   if (!text) return "";
   let out = String(text);
 
-  // 1) Quitar bloques con backticks
+  // Quitar bloques con backticks
   out = out.replace(/```[\s\S]*?```/g, "");
 
-  // 2) Quitar objetos/arrays balanceados
-  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, ""); // objetos
-  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, ""); // arrays
+  // Quitar objetos/arrays balanceados
+  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, "");
+  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, "");
 
-  // 3) Quitar líneas sueltas tipo JSON:  "clave": valor
+  // Quitar líneas sueltas tipo JSON:  "clave": valor
   out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, "");
 
-  // 4) Quitar claves JSON colgantes más comunes (por si quedan)
+  // Quitar claves comunes colgantes
   out = out.replace(
     /(^|\n)\s*(pyme_fields_ok|elegibilidad|esElegible|validezDias|input|planes)\s*[:=][^\n]*(?=\n|$)/gim,
     ""
   );
 
-  // 5) Si lo que queda no tiene letras (sólo { } [ ] : , " espacios), ocultar
+  // Si no quedan letras, no muestres nada
   const hasLetters = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(out);
   if (!hasLetters) return "";
 
-  // 6) Limpieza final
-  out = out.replace(/[{}\[\]]/g, ""); // llaves sueltas
-  out = out.replace(/\n{2,}/g, "\n").trim();
-  return out;
+  return out
+    .replace(/[{}\[\]]/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 }
 
 async function tryExtractCotizacionPyMEPDF(text) {
@@ -676,7 +681,7 @@ async function tryExtractCotizacionPyMEPDF(text) {
     company: USER_COMPANY,
     createdAt: new Date().toISOString(),
   };
-  saveQuoteForDashboard(wrapped, "pyme_pdf"); // reutiliza tu función
+  saveQuoteForDashboard(wrapped, "pyme_pdf");
 
   // Habilita botón y descarga automática
   if (pdfBtn) pdfBtn.disabled = false;
@@ -686,8 +691,6 @@ async function tryExtractCotizacionPyMEPDF(text) {
   } catch (e) {
     console.warn(e);
   } finally {
-    // Si el usuario cancela la descarga del navegador,
-    // el botón quedará habilitado para que pueda descargar manualmente.
     if (pdfBtn) pdfBtn.disabled = false;
   }
 }
@@ -700,49 +703,59 @@ async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // ➊ Intenta modo “todo en uno”
-  const bulk = parseBulkPyMEMessage(userMessage);
-  const hasAnySum =
-    (bulk.sumaContenido ?? 0) ||
-    (bulk.sumaEdificio ?? 0) ||
-    (bulk.sumaValoresCaja ?? 0) ||
-    (bulk.sumaValoresTransito ?? 0) ||
-    (bulk.sumaElectronicos ?? 0) ||
-    (bulk.sumaCristales ?? 0);
+  // Captura local de montos según la última pregunta
+  tryCaptureAmountFromUserReply(userMessage);
 
   let skipBackend = false;
 
-  if (
-    (bulk.negocioNombre || PYME_STATE.negocioNombre) &&
-    (bulk.actividadPrincipal || PYME_STATE.actividadPrincipal) &&
-    hasAnySum
-  ) {
-    // hidrata estado
-    if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
-    if (bulk.actividadPrincipal)
-      PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
-    savePymeState();
-
-    CURRENT_INPUT.sumaContenido =
-      bulk.sumaContenido ?? CURRENT_INPUT.sumaContenido ?? 0;
-    CURRENT_INPUT.sumaEdificio =
-      bulk.sumaEdificio ?? CURRENT_INPUT.sumaEdificio ?? 0;
-    CURRENT_INPUT.sumaValoresCaja =
-      bulk.sumaValoresCaja ?? CURRENT_INPUT.sumaValoresCaja ?? 0;
-    CURRENT_INPUT.sumaValoresTransito =
-      bulk.sumaValoresTransito ?? CURRENT_INPUT.sumaValoresTransito ?? 0;
-    CURRENT_INPUT.sumaElectronicos =
-      bulk.sumaElectronicos ?? CURRENT_INPUT.sumaElectronicos ?? 0;
-    CURRENT_INPUT.sumaCristales =
-      bulk.sumaCristales ?? CURRENT_INPUT.sumaCristales ?? 0;
-
+  // Atajo local: si dice "sí" y ya tenemos todo, cerrar y descargar
+  if (YES_RE.test(userMessage) && hasAllPyMEFields()) {
     const inputObj = buildInputFromState();
-
-    // arma y descarga SIN esperar confirmación del modelo
     await processPyMEAndOfferDownload(inputObj, 30);
-
-    // si ya generaste PDF, no tiene sentido mandar este turno al backend
     skipBackend = true;
+  } else {
+    // ➊ Intenta modo “todo en uno”
+    const bulk = parseBulkPyMEMessage(userMessage);
+    const hasAnySum =
+      (bulk.sumaContenido ?? 0) ||
+      (bulk.sumaEdificio ?? 0) ||
+      (bulk.sumaValoresCaja ?? 0) ||
+      (bulk.sumaValoresTransito ?? 0) ||
+      (bulk.sumaElectronicos ?? 0) ||
+      (bulk.sumaCristales ?? 0);
+
+    if (
+      (bulk.negocioNombre || PYME_STATE.negocioNombre) &&
+      (bulk.actividadPrincipal || PYME_STATE.actividadPrincipal) &&
+      hasAnySum
+    ) {
+      // hidrata estado
+      if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
+      if (bulk.actividadPrincipal)
+        PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
+      savePymeState();
+
+      CURRENT_INPUT.sumaContenido =
+        bulk.sumaContenido ?? CURRENT_INPUT.sumaContenido ?? 0;
+      CURRENT_INPUT.sumaEdificio =
+        bulk.sumaEdificio ?? CURRENT_INPUT.sumaEdificio ?? 0;
+      CURRENT_INPUT.sumaValoresCaja =
+        bulk.sumaValoresCaja ?? CURRENT_INPUT.sumaValoresCaja ?? 0;
+      CURRENT_INPUT.sumaValoresTransito =
+        bulk.sumaValoresTransito ?? CURRENT_INPUT.sumaValoresTransito ?? 0;
+      CURRENT_INPUT.sumaElectronicos =
+        bulk.sumaElectronicos ?? CURRENT_INPUT.sumaElectronicos ?? 0;
+      CURRENT_INPUT.sumaCristales =
+        bulk.sumaCristales ?? CURRENT_INPUT.sumaCristales ?? 0;
+
+      const inputObj = buildInputFromState();
+
+      // arma y descarga SIN esperar confirmación del modelo
+      await processPyMEAndOfferDownload(inputObj, 30);
+
+      // si ya generaste PDF, no tiene sentido mandar este turno al backend
+      skipBackend = true;
+    }
   }
 
   // pinta tu mensaje
@@ -772,7 +785,7 @@ async function sendMessageInternal(userMessage, withContext = false) {
         threadId: THREAD_ID,
         userName: USER_NAME,
         userCompany: USER_COMPANY,
-        history: getHistory(), // <<< memoria ligera
+        history: getHistory(),
       }),
     });
 
@@ -800,12 +813,11 @@ async function sendMessageInternal(userMessage, withContext = false) {
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
-
-      // Captura la "última pregunta" para mapear el siguiente número
-      LAST_QUESTION = shown;
+      LAST_QUESTION = shown; // para mapear la siguiente cifra
     } else {
-      // Si solo vino JSON, no mostramos nada (ya informamos con el mensaje del Sistema).
+      // Si solo vino JSON, no mostramos nada; los extractores disparan el PDF.
     }
+
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
@@ -1146,21 +1158,15 @@ async function descargarPDFPlantillaLia(payload) {
   const check = "X";
 
   filas.forEach((grupo) => {
-    // Encabezado del tipo (celda alta)
     drawCellText(grupo.tipo, colX.tipo, y, true);
     grupo.items.forEach((lab, idx) => {
-      if (idx === 0) {
-        // primera fila ya usa el “tipo”
-      } else {
-        // siguiente renglón del mismo grupo
-        y += rowH;
-      }
+      if (idx !== 0) y += rowH;
       drawCellText(lab, colX.cob, y);
       drawCellText(inPlan("base", lab) ? check : "", colX.base, y);
       drawCellText(inPlan("medio", lab) ? check : "", colX.medio, y);
       drawCellText(inPlan("plus", lab) ? check : "", colX.plus, y);
     });
-    y += rowH; // espaciado entre grupos
+    y += rowH;
   });
 
   // Precios
@@ -1232,7 +1238,7 @@ logoutBtn?.addEventListener("click", () => {
   sessionStorage.clear();
   window.location.href = BASE;
 
-  // 🔹 Si quieres que también borre la última cotización del Dashboard
+  // 🔹 (opcional) borra última cotización del Dashboard
   try {
     const KEY = quoteStorageKey(USER_NAME, USER_COMPANY);
     localStorage.removeItem(KEY);
@@ -1260,7 +1266,7 @@ async function pollThread(tid) {
         userName: USER_NAME,
         userCompany: USER_COMPANY,
         poll: true,
-        history: getHistory(), // envía memoria también en polling
+        history: getHistory(),
       }),
     });
 
