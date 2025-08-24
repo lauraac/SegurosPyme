@@ -765,36 +765,51 @@ async function descargarPDFPresupuesto() {
 }
 
 async function descargarPDFPyME(quoteResult) {
+  // Carga jsPDF si hace falta
   if (!(await ensureJsPDF())) {
     alert("Falta jsPDF.");
     return;
   }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-  doc.setFillColor(100, 75, 243);
-  doc.rect(0, 0, 595, 90, "F");
+  const { jsPDF } = window.jspdf;
+
+  // 👇 A4 horizontal y unidades en puntos
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 36; // margen
+
+  const violet = { r: 100, g: 75, b: 243 };
+
+  // ===== Encabezado
+  doc.setFillColor(violet.r, violet.g, violet.b);
+  doc.rect(0, 0, W, 80, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("SegurosPyme • Cotización PyME", 40, 55);
+  doc.setFontSize(22);
+  doc.text("SegurosPyme • Cotización PyME", M, 52);
 
+  // ===== Datos generales
+  const { input, planes, fecha, validezDias } = quoteResult;
   doc.setTextColor(34, 40, 49);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
+  doc.setFontSize(11);
 
-  const { input, planes, fecha, validezDias } = quoteResult;
-  let y = 120;
+  let y = 100;
   putKV("Fecha", prettyDate(fecha));
-  putKV("Validez", `${validezDias} días`);
+  putKV("Validez", `${Number(validezDias || 30)} días`);
   putKV("Negocio", input.negocioNombre || "—");
   putKV("Actividad", input.actividadPrincipal || "—");
 
-  y += 8;
-  doc.setDrawColor(100, 75, 243);
+  // ===== Resumen de sumas (cajita)
+  y += 6;
+  const boxW = W - M * 2;
+  const boxH = 110;
+  doc.setDrawColor(violet.r, violet.g, violet.b);
   doc.setFillColor(246, 245, 255);
-  doc.roundedRect(40, y, 515, 120, 8, 8, "FD");
-  let py = y + 20;
+  doc.roundedRect(M, y, boxW, boxH, 10, 10, "FD");
+
+  let ry = y + 22;
   putRow("Contenido", input.sumaContenido);
   putRow("Edificio", input.sumaEdificio);
   putRow("Valores en caja", input.sumaValoresCaja);
@@ -802,72 +817,122 @@ async function descargarPDFPyME(quoteResult) {
   putRow("Electrónicos", input.sumaElectronicos);
   putRow("Cristales", input.sumaCristales);
 
-  planes.forEach((p) => {
-    doc.addPage();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(34, 40, 49);
-    doc.text(`Plan ${p.nombrePlan}`, 40, 60);
+  // ===== Tres tarjetas de planes en una sola página
+  const colGap = 16;
+  const cardW = (W - M * 2 - colGap * 2) / 3; // 3 columnas
+  const cardH = H - (y + boxH + 36) - M;
+  const startY = y + boxH + 36;
 
-    let y2 = 90;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("Coberturas:", 40, y2);
-    y2 += 12;
+  const byName = {};
+  planes.forEach((p) => (byName[p.nombrePlan] = p));
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Cobertura", 40, y2);
-    doc.text("Suma (MXN)", 260, y2);
-    doc.text("Prima (MXN)", 420, y2);
-    y2 += 10;
-    doc.setFont("helvetica", "normal");
+  renderPlanCard(
+    byName["Base"],
+    "Plan Base",
+    M + 0 * (cardW + colGap),
+    startY,
+    cardW,
+    cardH
+  );
+  renderPlanCard(
+    byName["Medio"],
+    "Plan Medio",
+    M + 1 * (cardW + colGap),
+    startY,
+    cardW,
+    cardH
+  );
+  renderPlanCard(
+    byName["Plus"],
+    "Plan Plus",
+    M + 2 * (cardW + colGap),
+    startY,
+    cardW,
+    cardH
+  );
 
-    p.coberturas.forEach((cob) => {
-      doc.text(cob.descripcion, 40, y2);
-      doc.text(money(cob.suma), 260, y2, { align: "left" });
-      doc.text(money(cob.prima), 420, y2, { align: "left" });
-      y2 += 16;
-      if (y2 > 720) {
-        doc.addPage();
-        y2 = 60;
-      }
-    });
-
-    y2 += 10;
-    doc.setFont("helvetica", "bold");
-    doc.text("Resumen:", 40, y2);
-    y2 += 14;
-    doc.setFont("helvetica", "normal");
-    putLine("Prima Neta", p.primaNeta);
-    putLine("Gastos de Expedición", p.gastosExpedicion);
-    putLine("Derechos", p.derechos);
-    putLine("IVA", p.iva);
-    putLine("Prima Total", p.primaTotal);
-
-    function putLine(label, value) {
-      doc.text(label, 40, y2);
-      doc.text(money(value), 420, y2, { align: "left" });
-      y2 += 16;
-    }
-  });
-
+  // ===== Guardar
   const fname = `Cotizacion_PyME_${slug(input.negocioNombre || "negocio")}.pdf`;
   doc.save(fname);
 
+  // ---------- Helpers locales ----------
   function putKV(k, v) {
     doc.setFont("helvetica", "normal");
-    doc.text(`${k}:`, 40, y);
+    doc.text(`${k}:`, M, y);
     doc.setFont("helvetica", "bold");
-    const text = String(v ?? "—");
-    doc.text(text, 120, y);
+    doc.text(String(v ?? "—"), M + 110, y);
     y += 16;
   }
-  function putRow(k, v) {
+  function putRow(label, value) {
     doc.setFont("helvetica", "normal");
-    doc.text(`${k}:`, 60, py);
+    doc.text(`${label}:`, M + 18, ry);
     doc.setFont("helvetica", "bold");
-    doc.text(money(v || 0), 240, py);
-    py += 16;
+    doc.text(money(value || 0), M + 270, ry, { align: "left" });
+    ry += 16;
+  }
+
+  function renderPlanCard(plan, title, x, y, w, h) {
+    // marco
+    doc.setDrawColor(223);
+    doc.roundedRect(x, y, w, h, 10, 10, "S");
+
+    // título
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(title, x + 14, y + 24);
+
+    // cabecera tabla
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    let yy = y + 44;
+    doc.text("Coberturas:", x + 14, yy);
+    yy += 12;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Cobertura", x + 14, yy);
+    doc.text("Suma (MXN)", x + w - 165, yy);
+    doc.text("Prima (MXN)", x + w - 72, yy);
+    yy += 10;
+    doc.setFont("helvetica", "normal");
+
+    if (!plan || !Array.isArray(plan.coberturas)) {
+      doc.text("—", x + 14, yy + 2);
+      yy += 14;
+    } else {
+      const maxRows = 9; // ✨ ajustar si quieres más/menos filas
+      plan.coberturas.slice(0, maxRows).forEach((cob) => {
+        doc.text(String(cob.descripcion), x + 14, yy);
+        doc.text(money(cob.suma), x + w - 165, yy);
+        doc.text(money(cob.prima), x + w - 72, yy);
+        yy += 14;
+      });
+      if (plan.coberturas.length > maxRows) {
+        doc.text(
+          `… +${plan.coberturas.length - maxRows} coberturas más`,
+          x + 14,
+          yy
+        );
+        yy += 14;
+      }
+    }
+
+    // resumen de importes del plan
+    yy += 6;
+    doc.setFont("helvetica", "bold");
+    doc.text("Resumen:", x + 14, yy);
+    yy += 14;
+    doc.setFont("helvetica", "normal");
+    putSum("Prima Neta", plan?.primaNeta);
+    putSum("Gastos de Expedición", plan?.gastosExpedicion);
+    putSum("Derechos", plan?.derechos);
+    putSum("IVA", plan?.iva);
+    putSum("Prima Total", plan?.primaTotal);
+
+    function putSum(label, value) {
+      doc.text(label, x + 14, yy);
+      doc.text(money(value || 0), x + w - 72, yy);
+      yy += 14;
+    }
   }
 }
 
