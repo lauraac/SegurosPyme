@@ -670,8 +670,12 @@ async function sendMessageInternal(userMessage, withContext = false) {
       // Captura la "última pregunta" para mapear el siguiente número
       LAST_QUESTION = shown;
     } else {
-      // si no mostró nada (solo JSON), igual guarda algo en history
-      pushHistory("assistant", data.reply || "");
+      // Si no mostró nada (solo JSON), mostramos mensaje final bonito
+      addMessage(
+        "Agente Seguros PyME",
+        "✅ Tu cotización está lista. El PDF se ha generado correctamente."
+      );
+      pushHistory("assistant", "Cotización lista. PDF generado.");
     }
 
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
