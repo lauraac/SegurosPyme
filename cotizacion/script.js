@@ -376,9 +376,9 @@ function extractJsonCandidate(text) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1];
 
-  // Detecta presupuesto_ok O pyme_fields_ok
+  // 👇 añade cotizacion_pyme_pdf al alternado
   const inline = text.match(
-    /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok)"[\s\S]*?\}/i
+    /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/i
   );
   if (inline) return inline[0];
 
@@ -527,11 +527,23 @@ function sanitizeAssistantReply(text) {
   // Quita bloques con backticks (```json ... ```)
   out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
 
-  // Quita JSON inline con event: presupuesto_ok, pyme_fields_ok o cotizacion_pyme_pdf
+  // Quita JSON inline con event: presupuesto_ok | pyme_fields_ok | cotizacion_pyme_pdf
   out = out.replace(
     /\{[\s\S]*?"event"\s*:\s*"(?:presupuesto_ok|pyme_fields_ok|cotizacion_pyme_pdf)"[\s\S]*?\}/gi,
     ""
   );
+
+  // Quita JSONs "pequeños" de confirmación/elegibilidad que a veces manda el modelo
+  // Ej: { "pyme_fields_ok": true }  |  { "esElegible": false, "motivo": "..." }
+  out = out.replace(
+    /\{\s*"(?:pyme_fields_ok|esElegible|elegibilidad|motivo|ok|status)"[\s\S]*?\}/gi,
+    ""
+  );
+
+  // Si el mensaje es SOLO un JSON (sin texto) lo ocultamos por completo
+  if (/^\s*\{[\s\S]*\}\s*$/.test(out.trim())) {
+    out = "";
+  }
 
   // Limpieza
   out = out
@@ -592,28 +604,9 @@ async function sendMessage() {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  // Actualiza estado (nombre/actividad) + intenta capturar monto
+  // 👇  vuelve a dejar estas dos líneas
   updateStateFromUser(userMessage);
   tryCaptureAmountFromUserReply(userMessage);
-
-  // Si usuario dijo "sí" y no llega JSON, construimos desde estado
-  if (/^\s*s[íi]\s*$/i.test(userMessage)) {
-    const inputObj = buildInputFromState();
-    // Validación mínima: tener al menos nombre, actividad y algún monto > 0
-    const hasAnySum =
-      inputObj.sumaContenido ||
-      inputObj.sumaEdificio ||
-      inputObj.sumaValoresCaja ||
-      inputObj.sumaValoresTransito ||
-      inputObj.sumaElectronicos ||
-      inputObj.sumaCristales;
-
-    if (inputObj.negocioNombre && inputObj.actividadPrincipal && hasAnySum) {
-      // Evita que se vea JSON: armamos directo y ofrecemos descarga
-      processPyMEAndOfferDownload(inputObj, 30);
-      // aún así enviamos al backend para mantener coherencia del hilo
-    }
-  }
 
   pushHistory("user", userMessage);
   addMessage("Tú", userMessage);
@@ -670,12 +663,12 @@ async function sendMessageInternal(userMessage, withContext = false) {
       // Captura la "última pregunta" para mapear el siguiente número
       LAST_QUESTION = shown;
     } else {
-      // Si no mostró nada (solo JSON), mostramos mensaje final bonito
+      // Si solo vino JSON (oculto), mostramos cierre amigable
       addMessage(
         "Agente Seguros PyME",
-        "✅ Tu cotización está lista. El PDF se ha generado correctamente."
+        "✅ Tu cotización está lista. El PDF se ha generado y puedes descargarlo desde el botón si lo prefieres."
       );
-      pushHistory("assistant", "Cotización lista. PDF generado.");
+      pushHistory("assistant", "Cotización lista. PDF generado (JSON oculto).");
     }
 
     // Analiza el texto ORIGINAL para habilitar PDF/guardar JSON
@@ -1154,10 +1147,22 @@ async function pollThread(tid) {
     if (shown) {
       addMessage("Agente Seguros PyME", shown);
       pushHistory("assistant", shown);
-      LAST_QUESTION = shown; // para mapear el siguiente número
+      LAST_QUESTION = shown;
     }
+
+    // Procesa posibles JSONs
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
+    await tryExtractCotizacionPyMEPDF(data.reply);
+
+    // Si solo vino JSON (y lo ocultamos), muestra cierre amable
+    if (!shown) {
+      addMessage(
+        "Agente Seguros PyME",
+        "✅ Tu cotización está lista. El PDF se ha generado y puedes descargarlo desde el botón si lo prefieres."
+      );
+      pushHistory("assistant", "Cotización lista. PDF generado (JSON oculto).");
+    }
   } catch (e) {
     console.error(e);
     addMessage("Sistema", `⚠️ ${e.message}`);
