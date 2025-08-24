@@ -623,37 +623,31 @@ async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
 // Oculta bloques ```...``` e inline JSON del mensaje mostrado y limpia comas
 function sanitizeAssistantReply(text) {
   if (!text) return "";
-  let out = String(text).trim();
+  let out = String(text);
 
-  // 0) Si la respuesta es SOLO un JSON válido -> ocultar completamente
-  try {
-    const maybe = JSON.parse(out);
-    if (maybe && typeof maybe === "object") return "";
-  } catch {}
+  // 1) Quitar bloques con backticks
+  out = out.replace(/```[\s\S]*?```/g, "");
 
-  // 1) Quita bloques con backticks (```json ... ```)
-  out = out.replace(/```(?:json)?[\s\S]*?```/gi, "");
+  // 2) Quitar objetos/arrays balanceados
+  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, ""); // objetos
+  out = out.replace(/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/g, ""); // arrays
 
-  // 2) Quita cualquier JSON "inline" válido dentro del texto
-  out = out.replace(/\{(?:[^{}]|{[^{}]*})*\}/g, (m) => {
-    try {
-      JSON.parse(m);
-      return "";
-    } catch {
-      return m;
-    }
-  });
+  // 3) Quitar líneas sueltas tipo JSON:  "clave": valor
+  out = out.replace(/(^|\n)\s*"[^"\n]+"\s*:\s*[^{}\n]+(?=\n|$)/g, "");
 
-  // 3) Extra: limpia mini-JSONs no 100% estándar que a veces manda el modelo
-  out = out.replace(/\{\s*"?pyme_fields_ok"?\s*:\s*(true|false)\s*\}/gi, "");
+  // 4) Quitar claves JSON colgantes más comunes (por si quedan)
+  out = out.replace(
+    /(^|\n)\s*(pyme_fields_ok|elegibilidad|esElegible|validezDias|input|planes)\s*[:=][^\n]*(?=\n|$)/gim,
+    ""
+  );
 
-  // Limpieza final
-  out = out
-    .replace(/\s*,\s*(?=[}\]])/g, "")
-    .replace(/(^|\n)\s*,\s*/g, "$1")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
+  // 5) Si lo que queda no tiene letras (sólo { } [ ] : , " espacios), ocultar
+  const hasLetters = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(out);
+  if (!hasLetters) return "";
 
+  // 6) Limpieza final
+  out = out.replace(/[{}\[\]]/g, ""); // llaves sueltas
+  out = out.replace(/\n{2,}/g, "\n").trim();
   return out;
 }
 
