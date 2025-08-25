@@ -1161,7 +1161,7 @@ document.getElementById("new-quote")?.addEventListener("click", () => {
   resetConversationState();
   addMessage(
     "Lia",
-    "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización PyME"
+    "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización"
   );
 });
 
