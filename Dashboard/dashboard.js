@@ -238,71 +238,15 @@ document.addEventListener("DOMContentLoaded", () => {
     bodyEl.innerHTML = html;
     lastEl.classList.remove("d-none");
   }
-  function wireGallery() {
-    const openBtn = $("#kpi-open-gallery");
-    const modalEl = $("#pdfGalleryModal");
-    if (!openBtn || !modalEl) return;
-
-    const galleryList = $("#pdf-gallery-list");
-    const modal = new bootstrap.Modal(modalEl);
-
-    openBtn.addEventListener("click", () => {
-      const arr = readPdfLibrary();
-      if (!galleryList) return;
-
-      if (!arr.length) {
-        galleryList.innerHTML = `<div class="list-group-item text-secondary">No hay PDFs aún.</div>`;
-      } else {
-        galleryList.innerHTML = arr
-          .map((it) => {
-            const d = new Date(it.createdAt || 0).toLocaleString();
-            const kind =
-              (it.kind === "pyme" && "PyME") ||
-              (it.kind === "presupuesto" && "Presupuesto") ||
-              (it.kind === "pyme_pdf" && "PyME") ||
-              "PDF";
-            const fname = it.filename || "Cotizacion.pdf";
-            return `
-          <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div class="me-3">
-              <div class="fw-700">${escapeHtml(it.title || fname)}</div>
-              <small class="text-secondary">${d} · ${kind}</small>
-            </div>
-            <a class="btn btn-sm btn-primary"
-               download="${escapeHtml(fname)}"
-               href="${it.dataUrl}">
-              Descargar
-            </a>
-          </div>
-        `;
-          })
-          .join("");
-      }
-
-      modal.show();
-    });
-  }
 
   /* ============== Galería (con Ver/Descargar) ============== */
+
   function wireGallery() {
     const openBtn = document.querySelector("#kpi-open-gallery");
     const modalEl = document.querySelector("#pdfGalleryModal");
     const galleryList = document.querySelector("#pdf-gallery-list");
     if (!openBtn || !modalEl || !galleryList) return;
 
-    // Delegación: un solo listener para todos los botones .js-view
-    // (se adjunta una sola vez y funciona aunque repintes la lista)
-    if (!galleryList.dataset.wired) {
-      galleryList.addEventListener("click", (e) => {
-        const btn = e.target.closest(".js-view");
-        if (!btn) return;
-        e.preventDefault();
-        const dataUrl = btn.dataset.url || btn.getAttribute("data-url");
-        if (dataUrl) openPdfDataUrl(dataUrl);
-      });
-      galleryList.dataset.wired = "1";
-    }
-
     const modal = new bootstrap.Modal(modalEl);
 
     openBtn.addEventListener("click", () => {
@@ -326,11 +270,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="fw-700">${escapeHtml(it.title || fname)}</div>
               <small class="text-secondary">${d} · ${kind}</small>
             </div>
-            <button type="button"
-                    class="btn btn-sm btn-primary js-view"
-                    data-url="${it.dataUrl}">
-              Ver
-            </button>
+            <a class="btn btn-sm btn-primary" download="${escapeHtml(
+              fname
+            )}" href="${it.dataUrl}">
+              Descargar
+            </a>
           </div>
         `;
           })
