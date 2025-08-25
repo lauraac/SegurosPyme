@@ -238,6 +238,17 @@ document.addEventListener("DOMContentLoaded", () => {
     bodyEl.innerHTML = html;
     lastEl.classList.remove("d-none");
   }
+  async function openPdfDataUrl(dataUrl) {
+    try {
+      const resp = await fetch(dataUrl); // toma el data:… como stream
+      const blob = await resp.blob(); // lo convierte a PDF real
+      const url = URL.createObjectURL(blob); // Blob URL (rápido)
+      window.open(url, "_blank", "noopener"); // abre en nueva pestaña
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      alert("No se pudo abrir el PDF.");
+    }
+  }
 
   /* ============== Galería (con Ver/Descargar) ============== */
   function wireGallery() {
@@ -254,6 +265,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!arr.length) {
         galleryList.innerHTML = `<div class="list-group-item text-secondary">No hay PDFs aún.</div>`;
+        galleryList.querySelectorAll(".js-view").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            openPdfDataUrl(btn.getAttribute("data-url"));
+          });
+        });
       } else {
         galleryList.innerHTML = arr
           .map((it) => {
@@ -271,9 +287,9 @@ document.addEventListener("DOMContentLoaded", () => {
                   <small class="text-secondary">${d} · ${kind}</small>
                 </div>
                 <div class="btn-group">
-                  <a class="btn btn-sm btn-outline-secondary" target="_blank" href="${
-                    it.dataUrl
-                  }">Ver</a>
+ <button type="button" class="btn btn-sm btn-outline-secondary js-view" data-url="${
+   it.dataUrl
+ }">Ver</button>
                   <a class="btn btn-sm btn-primary" download="${escapeHtml(
                     fname
                   )}" href="${it.dataUrl}">Descargar</a>
