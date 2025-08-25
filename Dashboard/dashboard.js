@@ -53,6 +53,15 @@ document.addEventListener("DOMContentLoaded", () => {
       return [];
     }
   }
+  // === Respaldo: leer la última cotización simple (no PDF) ===
+  function readLastQuote() {
+    try {
+      const w = JSON.parse(localStorage.getItem("lastQuote") || "null");
+      return w && w.data ? w : null;
+    } catch {
+      return null;
+    }
+  }
 
   /* ============== KPI: cotizaciones del mes ============== */
   function setQuotesThisMonthKPI() {
@@ -60,10 +69,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const now = new Date();
     const m = now.getMonth();
     const y = now.getFullYear();
-    const count = list.filter((x) => {
+
+    let count = list.filter((x) => {
       const d = new Date(x.createdAt || 0);
       return d.getMonth() === m && d.getFullYear() === y;
     }).length;
+
+    // Respaldo: si no hay PDFs del mes, pero sí hay lastQuote del mes
+    if (count === 0) {
+      const w = readLastQuote();
+      if (w?.createdAt) {
+        const d = new Date(w.createdAt);
+        if (d.getMonth() === m && d.getFullYear() === y) count = 1;
+      }
+    }
+
     const kpiEl = $("#kpi-quotes-this-month");
     if (kpiEl) kpiEl.textContent = String(count);
   }
@@ -77,6 +97,35 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!container) return;
 
     if (!list.length) {
+      // Respaldo: intenta mostrar lastQuote aunque no haya PDFs guardados
+      const w = readLastQuote();
+      if (w) {
+        emptyEl?.classList.add("d-none");
+
+        let title = "Cotización";
+        let kind = "PYME";
+        let created = new Date(w.createdAt || Date.now()).toLocaleDateString();
+
+        if (w.kind === "pyme" && w.data?.input) {
+          title = `${w.data.input.negocioNombre || "Negocio"} • ${created}`;
+          kind = "PyME";
+        } else if (w.kind === "presupuesto") {
+          title = `${w.data.cliente || "Cliente"} • ${created}`;
+          kind = "Presupuesto";
+        }
+
+        container.innerHTML = `
+      <div class="list-group-item px-0 d-flex align-items-start justify-content-between">
+        <div class="me-3">
+          <div class="fw-700">${escapeHtml(title)}</div>
+          <small class="text-secondary">${created} · ${kind}</small>
+        </div>
+      </div>
+    `;
+        return;
+      }
+
+      // Si tampoco hay lastQuote, muestra el vacío
       container.innerHTML = "";
       emptyEl?.classList.remove("d-none");
       return;
