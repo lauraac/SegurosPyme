@@ -817,7 +817,7 @@ async function descargarPDFPyME(quoteResult) {
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.text("SegurosPyme • Cotización PyME", M, 52);
+  doc.text("Lia • Cotización PyME", M, 52);
 
   // ===== Datos generales
   const { input, planes, fecha, validezDias } = quoteResult;
