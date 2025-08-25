@@ -1,60 +1,24 @@
-// Dashboard/dashboard.js
 document.addEventListener("DOMContentLoaded", () => {
-  /* ============== helpers ============== */
+  /* ============== helpers de sesión ============== */
   const qs = new URLSearchParams(location.search);
   const getParam = (k) => (qs.get(k) || "").trim();
-  const $ = (sel) => document.querySelector(sel);
 
-  const slug = (s) =>
-    String(s || "")
-      .trim()
-      .replace(/\s+/g, "_")
-      .replace(/[^\w-]/g, "")
-      .toLowerCase();
-
-  const money = (n) =>
-    Number(n || 0).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
-  const prettyDate = (d) => {
-    if (!d) return "";
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
-      const [y, m, day] = d.split("-").map(Number);
-      const dt = new Date(y, m - 1, day);
-      return dt.toLocaleDateString();
-    }
-    const dt = new Date(d);
-    return isNaN(dt) ? String(d) : dt.toLocaleDateString();
-  };
-
-  const quoteStorageKey = (user, company) =>
-    `sp:lastQuote:${slug(user || "anon")}:${slug(company || "")}`;
-  const pdfLibKey = (u, c) => `sp:pdfLib:${slug(u)}:${slug(c)}`;
-
-  /* ============== sesión/identidad ============== */
-  // Si vienen en el querystring, los persistimos
   const qsName = getParam("name");
   const qsCompany = getParam("company");
   if (qsName) localStorage.setItem("userName", qsName);
   if (qsCompany) localStorage.setItem("userCompany", qsCompany);
 
-  // Leemos de localStorage
   const name = localStorage.getItem("userName") || "Usuario";
   const company = localStorage.getItem("userCompany") || "";
   const email = localStorage.getItem("userEmail") || "";
 
-  /* ============== pinta encabezados/topbar ============== */
-  const welcomeNameEl = $("#welcomeName");
-  if (welcomeNameEl) welcomeNameEl.textContent = name.toUpperCase();
+  const $ = (sel) => document.querySelector(sel);
 
-  const topUserEl = $("#topUser");
-  const topCompanyEl = $("#topCompany");
-  if (topUserEl) topUserEl.textContent = name.toUpperCase();
-  if (topCompanyEl) topCompanyEl.textContent = company || email || "";
+  /* ============== encabezados / links ============== */
+  $("#welcomeName") && ($("#welcomeName").textContent = name.toUpperCase());
+  $("#topUser") && ($("#topUser").textContent = name.toUpperCase());
+  $("#topCompany") && ($("#topCompany").textContent = company || email || "");
 
-  // Botón "Nueva Cotización" con sesión en QS
   const newQuoteLink = document.querySelector(
     'a[href*="cotizacion/index.html"]'
   );
@@ -65,187 +29,197 @@ document.addEventListener("DOMContentLoaded", () => {
     newQuoteLink.setAttribute("href", href.pathname + href.search);
   }
 
-  /* ============== biblioteca de PDFs y últimas cotizaciones ============== */
-  function getPdfLib() {
+  /* ============== util: almacenamiento de PDFs ============== */
+  const slug = (s = "") =>
+    String(s)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^\w-]/g, "");
+
+  const pdfLibKey = (u, c) => `sp:pdfLib:${slug(u)}:${slug(c)}`;
+
+  function readPdfLibrary() {
     try {
-      const arr = JSON.parse(
-        localStorage.getItem(pdfLibKey(name, company)) || "[]"
+      const key = pdfLibKey(name, company);
+      const arr = JSON.parse(localStorage.getItem(key) || "[]");
+      // Orden más reciente primero
+      return arr.sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
       );
-      // Más reciente primero
-      return arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } catch {
       return [];
     }
   }
 
-  const pdfs = getPdfLib();
-
-  // KPI: cotizaciones del mes (cuenta PDFs guardados este mes)
-  const kpiEl = $("#kpi-quotes-this-month");
-  if (kpiEl) {
+  /* ============== KPI: cotizaciones del mes ============== */
+  function setQuotesThisMonthKPI() {
+    const list = readPdfLibrary();
     const now = new Date();
-    const count = pdfs.filter((p) => {
-      const d = new Date(p.createdAt);
-      return (
-        d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
-      );
+    const m = now.getMonth();
+    const y = now.getFullYear();
+    const count = list.filter((x) => {
+      const d = new Date(x.createdAt || 0);
+      return d.getMonth() === m && d.getFullYear() === y;
     }).length;
-    kpiEl.textContent = String(count);
+    const kpiEl = $("#kpi-quotes-this-month");
+    if (kpiEl) kpiEl.textContent = String(count);
   }
 
-  // Cotizaciones recientes (mostramos hasta 6 PDFs)
-  const listEl = $("#quotes-list");
-  const emptyEl = $("#quotes-empty");
+  /* ============== Cotizaciones recientes (solo 1 y sin botones) ============== */
+  function renderRecentOnlyOne() {
+    const list = readPdfLibrary();
+    const container = $("#quotes-list");
+    const emptyEl = $("#quotes-empty");
 
-  function rowFromPdf(p) {
-    const when = new Date(p.createdAt);
+    if (!container) return;
+
+    if (!list.length) {
+      container.innerHTML = "";
+      emptyEl?.classList.remove("d-none");
+      return;
+    }
+
+    emptyEl?.classList.add("d-none");
+
+    const it = list[0]; // SOLO la más reciente
+    const created = new Date(it.createdAt || Date.now());
+    const niceDate = created.toLocaleDateString();
     const kind =
-      p.kind === "pyme"
-        ? "PyME"
-        : p.kind === "presupuesto"
-        ? "Presupuesto"
-        : (p.kind || "").toUpperCase();
+      (it.kind === "pyme" && "PyME") ||
+      (it.kind === "presupuesto" && "Presupuesto") ||
+      (it.kind === "pyme_pdf" && "PyME") ||
+      "PDF";
 
-    return `
-      <div class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-          <div class="fw-700">${p.title || p.filename || "Cotización"}</div>
-          <div class="small text-secondary">
-            ${when.toLocaleDateString()} · ${kind}
-          </div>
+    container.innerHTML = `
+      <div class="list-group-item px-0 d-flex align-items-start justify-content-between">
+        <div class="me-3">
+          <div class="fw-700">${escapeHtml(it.title || "Cotización")}</div>
+          <small class="text-secondary">${niceDate} · ${kind}</small>
         </div>
-        <div class="d-flex gap-2">
-          <a class="btn btn-sm btn-outline-primary" target="_blank" href="${
-            p.dataUrl
-          }">Ver</a>
-          <a class="btn btn-sm btn-primary" href="${p.dataUrl}" download="${
-      p.filename || "cotizacion.pdf"
-    }">Descargar</a>
-        </div>
+        <!-- intencionalmente SIN botones aquí -->
       </div>
     `;
   }
 
-  if (listEl) {
-    if (pdfs.length) {
-      emptyEl?.classList.add("d-none");
-      listEl.innerHTML = pdfs.slice(0, 6).map(rowFromPdf).join("");
-    } else {
-      listEl.innerHTML = "";
-      emptyEl?.classList.remove("d-none");
-    }
+  function escapeHtml(s = "") {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
-  // Última cotización (bloque “Última cotización generada”)
-  const lastQuoteCard = $("#last-quote");
-  const lastQuoteBody = $("#last-quote-body");
+  /* ============== Tarjeta “Última cotización generada” ============== */
+  function renderLastQuoteCard() {
+    const lastEl = $("#last-quote");
+    const bodyEl = $("#last-quote-body");
+    if (!lastEl || !bodyEl) return;
 
-  function paintLastQuoteFromStorage() {
+    // Se guarda en la cotización la clave sp:lastQuote:*
+    let wrapped = null;
     try {
-      const raw = localStorage.getItem(quoteStorageKey(name, company));
-      if (!raw) return false;
-      const last = JSON.parse(raw);
-      if (!last || !last.data) return false;
+      wrapped = JSON.parse(localStorage.getItem("lastQuote") || "null");
+    } catch {}
 
-      const kind = (last.kind || "").toUpperCase();
-      const createdAt = new Date(last.createdAt || Date.now()).toLocaleString();
+    if (!wrapped || !wrapped.data) {
+      lastEl.classList.add("d-none");
+      return;
+    }
 
-      // Intentamos mostrar algo útil según el tipo
-      let summary = "";
-      if (last.kind === "pyme" && last.data?.input) {
-        const inp = last.data.input;
-        summary = `
-          <div><strong>Negocio:</strong> ${inp.negocioNombre || "-"}</div>
-          <div><strong>Actividad:</strong> ${
-            inp.actividadPrincipal || "-"
-          }</div>
-          <div class="mt-2 small text-secondary">${createdAt} · ${kind}</div>`;
-      } else if (last.kind === "presupuesto") {
-        const cli = last.data?.cliente || name;
-        const monto = last.data?.precio?.monto ?? 0;
-        summary = `
-          <div><strong>Cliente:</strong> ${cli}</div>
-          <div><strong>Total:</strong> $${money(monto)}</div>
-          <div class="mt-2 small text-secondary">${createdAt} · ${kind}</div>`;
+    const kind = wrapped.kind;
+    let html = "";
+
+    if (kind === "pyme" && wrapped.data?.input) {
+      const inp = wrapped.data.input;
+      html = `
+        <div><strong>Negocio:</strong> ${escapeHtml(
+          inp.negocioNombre || "—"
+        )}</div>
+        <div><strong>Actividad:</strong> ${escapeHtml(
+          inp.actividadPrincipal || "—"
+        )}</div>
+        <div class="small text-secondary mt-2">${new Date(
+          wrapped.createdAt || Date.now()
+        ).toLocaleString()} · PYME</div>
+      `;
+    } else if (kind === "presupuesto") {
+      const q = wrapped.data || {};
+      html = `
+        <div><strong>Cliente:</strong> ${escapeHtml(q.cliente || "—")}</div>
+        <div><strong>Monto:</strong> ${Number(
+          q?.precio?.monto || 0
+        ).toLocaleString()}</div>
+        <div class="small text-secondary mt-2">${new Date(
+          wrapped.createdAt || Date.now()
+        ).toLocaleString()} · PRESUPUESTO</div>
+      `;
+    } else {
+      html = `
+        <div>${escapeHtml(wrapped?.data?.title || "Documento")}</div>
+        <div class="small text-secondary mt-2">${new Date(
+          wrapped.createdAt || Date.now()
+        ).toLocaleString()}</div>
+      `;
+    }
+
+    bodyEl.innerHTML = html;
+    lastEl.classList.remove("d-none");
+  }
+
+  /* ============== Galería (con Ver/Descargar) ============== */
+  function wireGallery() {
+    const openBtn = $("#kpi-open-gallery");
+    const modalEl = $("#pdfGalleryModal");
+    if (!openBtn || !modalEl) return;
+
+    const galleryList = $("#pdf-gallery-list");
+    const modal = new bootstrap.Modal(modalEl);
+
+    openBtn.addEventListener("click", () => {
+      const arr = readPdfLibrary();
+      if (!galleryList) return;
+
+      if (!arr.length) {
+        galleryList.innerHTML = `<div class="list-group-item text-secondary">No hay PDFs aún.</div>`;
       } else {
-        summary = `<div class="small text-secondary">${createdAt} · ${kind}</div>`;
+        galleryList.innerHTML = arr
+          .map((it) => {
+            const d = new Date(it.createdAt || 0).toLocaleString();
+            const kind =
+              (it.kind === "pyme" && "PyME") ||
+              (it.kind === "presupuesto" && "Presupuesto") ||
+              (it.kind === "pyme_pdf" && "PyME") ||
+              "PDF";
+            const fname = it.filename || "Cotizacion.pdf";
+            return `
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div class="me-3">
+                  <div class="fw-700">${escapeHtml(it.title || fname)}</div>
+                  <small class="text-secondary">${d} · ${kind}</small>
+                </div>
+                <div class="btn-group">
+                  <a class="btn btn-sm btn-outline-secondary" target="_blank" href="${
+                    it.dataUrl
+                  }">Ver</a>
+                  <a class="btn btn-sm btn-primary" download="${escapeHtml(
+                    fname
+                  )}" href="${it.dataUrl}">Descargar</a>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
       }
 
-      lastQuoteBody.innerHTML = summary;
-      lastQuoteCard?.classList.remove("d-none");
-      return true;
-    } catch {
-      return false;
-    }
+      modal.show();
+    });
   }
 
-  // Si no hay “lastQuote” del flujo viejo, mostramos el PDF más reciente
-  function paintLastQuoteFromPdfs() {
-    if (!pdfs.length || !lastQuoteBody) return false;
-    const p = pdfs[0];
-    const when = new Date(p.createdAt).toLocaleString();
-    lastQuoteBody.innerHTML = `
-      <div><strong>Título:</strong> ${
-        p.title || p.filename || "Cotización"
-      }</div>
-      <div><strong>Tipo:</strong> ${(p.kind || "").toUpperCase()}</div>
-      <div class="mt-2 small text-secondary">${when}</div>
-      <div class="mt-2 d-flex gap-2">
-        <a class="btn btn-sm btn-outline-primary" target="_blank" href="${
-          p.dataUrl
-        }">Ver</a>
-        <a class="btn btn-sm btn-primary" href="${p.dataUrl}" download="${
-      p.filename || "cotizacion.pdf"
-    }">Descargar</a>
-      </div>
-    `;
-    lastQuoteCard?.classList.remove("d-none");
-    return true;
-  }
-
-  if (!paintLastQuoteFromStorage()) {
-    paintLastQuoteFromPdfs();
-  }
-
-  /* ============== modal/galería ============== */
-  $("#kpi-open-gallery")?.addEventListener("click", () => {
-    const list = $("#pdf-gallery-list");
-    if (list) {
-      list.innerHTML = pdfs.length
-        ? pdfs
-            .map((p, idx) => {
-              const when = new Date(p.createdAt).toLocaleString();
-              const badge = idx === 0 ? "🆕 " : "";
-              const kind =
-                p.kind === "pyme"
-                  ? "PyME"
-                  : p.kind === "presupuesto"
-                  ? "Presupuesto"
-                  : (p.kind || "").toUpperCase();
-              return `
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="fw-700">${badge}${
-                p.title || p.filename || "Cotización"
-              }</div>
-                    <div class="small text-secondary">${when} · ${kind}</div>
-                  </div>
-                  <div class="d-flex gap-2">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="${
-                      p.dataUrl
-                    }">Ver</a>
-                    <a class="btn btn-sm btn-primary" href="${
-                      p.dataUrl
-                    }" download="${
-                p.filename || "cotizacion.pdf"
-              }">Descargar</a>
-                  </div>
-                </div>
-              `;
-            })
-            .join("")
-        : `<div class="text-secondary">Aún no tienes PDFs guardados.</div>`;
-    }
-    new bootstrap.Modal(document.getElementById("pdfGalleryModal")).show();
-  });
+  /* ============== inicializa ============== */
+  setQuotesThisMonthKPI();
+  renderRecentOnlyOne();
+  renderLastQuoteCard();
+  wireGallery();
 });
