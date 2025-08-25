@@ -1,6 +1,8 @@
 /* ================== Config rápido ================== */
 const AUTO_DOWNLOAD_PDF = true;
 const AUTO_DOWNLOAD_JSON = false;
+/* ===== Identidad visible del asistente ===== */
+const AGENT_NAME = "Lia";
 
 /* ================== UI ================== */
 const input = document.getElementById("chat-input");
@@ -263,7 +265,9 @@ function updateStateFromUser(text) {
   }
 }
 function buildShortContext() {
-  const parts = [];
+  const parts = [
+    "Instrucciones: Te llamas 'Lia'. No uses 'Agente Seguros PyME' ni otros nombres. Responde en español.",
+  ];
   if (PYME_STATE.negocioNombre)
     parts.push(`Nombre del negocio: ${PYME_STATE.negocioNombre}`);
   if (PYME_STATE.actividadPrincipal)
@@ -428,11 +432,11 @@ async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
   if (AUTO_DOWNLOAD_PDF) {
     try {
       await descargarPDFPyME(quoteResult);
-      addMessage("Agente Seguros PyME", "📄 PDF generado y descargado.");
+      addMessage(AGENT_NAME, "📄 PDF generado y descargado.");
     } catch (e) {
       console.warn(e);
       addMessage(
-        "Agente Seguros PyME",
+        AGENT_NAME,
         "No se pudo descargar automático. Usa el botón **Descargar PDF**."
       );
       if (pdfBtn) pdfBtn.disabled = false;
@@ -505,7 +509,7 @@ async function tryExtractPymeQuote(text) {
       await processPyMEAndOfferDownload(inputObj, 30);
     } else {
       addMessage(
-        "Agente Seguros PyME",
+        AGENT_NAME,
         "Necesito al menos nombre, actividad y alguna suma para generar el PDF."
       );
     }
@@ -515,7 +519,7 @@ async function tryExtractPymeQuote(text) {
   if (obj.event === "pyme_fields_ok") {
     if (obj.elegibilidad && obj.elegibilidad.esElegible === false) {
       addMessage(
-        "Agente Seguros PyME",
+        AGENT_NAME,
         `El giro requiere evaluación especial: ${
           obj.elegibilidad?.motivoNoElegible || "—"
         }`
@@ -652,7 +656,7 @@ async function sendMessageInternal(userMessage, withContext = false) {
 
     const shown = sanitizeAssistantReply(data.reply);
     if (shown) {
-      addMessage("Agente Seguros PyME", shown);
+      addMessage(AGENT_NAME, shown);
       pushHistory("assistant", shown);
       LAST_QUESTION = shown;
     }
@@ -1199,7 +1203,7 @@ async function pollThread(tid) {
 
     const shown = sanitizeAssistantReply(data.reply);
     if (shown) {
-      addMessage("Agente Seguros PyME", shown);
+      addMessage(AGENT_NAME, shown);
       pushHistory("assistant", shown);
       LAST_QUESTION = shown;
     }
