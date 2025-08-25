@@ -38,6 +38,25 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/[^\w-]/g, "");
 
   const pdfLibKey = (u, c) => `sp:pdfLib:${slug(u)}:${slug(c)}`;
+  const quoteStorageKey = (u, c) =>
+    `sp:lastQuote:${slug(u || "anon")}:${slug(c || "")}`;
+
+  // --- MIGRACIÓN / LIMPIEZA: mover la clave global "lastQuote" a la clave por usuario/empresa
+  try {
+    const globalLast = localStorage.getItem("lastQuote");
+    if (globalLast && !localStorage.getItem(quoteStorageKey(name, company))) {
+      const parsed = JSON.parse(globalLast);
+      if (
+        (parsed?.user || "").toLowerCase() === (name || "").toLowerCase() &&
+        (parsed?.company || "").toLowerCase() === (company || "").toLowerCase()
+      ) {
+        localStorage.setItem(quoteStorageKey(name, company), globalLast);
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo migrar 'lastQuote' global:", e);
+  }
+  localStorage.removeItem("lastQuote");
 
   function readPdfLibrary() {
     try {
@@ -56,7 +75,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // === Respaldo: leer la última cotización simple (no PDF) ===
   function readLastQuote() {
     try {
-      const w = JSON.parse(localStorage.getItem("lastQuote") || "null");
+      const key = quoteStorageKey(name, company);
+      const w = JSON.parse(localStorage.getItem(key) || "null");
       return w && w.data ? w : null;
     } catch {
       return null;
@@ -169,7 +189,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Se guarda en la cotización la clave sp:lastQuote:*
     let wrapped = null;
     try {
-      wrapped = JSON.parse(localStorage.getItem("lastQuote") || "null");
+      wrapped = JSON.parse(
+        localStorage.getItem(quoteStorageKey(name, company)) || "null"
+      );
     } catch {}
 
     if (!wrapped || !wrapped.data) {

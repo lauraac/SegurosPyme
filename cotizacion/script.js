@@ -349,7 +349,10 @@ function saveQuoteForDashboard(payload, kind) {
   try {
     const LKEY = quoteStorageKey(USER_NAME, USER_COMPANY);
     localStorage.setItem(LKEY, JSON.stringify(wrapped));
-    localStorage.setItem("lastQuote", JSON.stringify(wrapped));
+    localStorage.setItem(
+      quoteStorageKey(USER_NAME, USER_COMPANY),
+      JSON.stringify(wrapped)
+    );
   } catch (e) {
     console.warn("No se pudo persistir la cotización:", e);
   }
