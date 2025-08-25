@@ -268,27 +268,16 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="fw-700">${escapeHtml(it.title || fname)}</div>
               <small class="text-secondary">${d} · ${kind}</small>
             </div>
-            <div class="btn-group">
-              <button type="button"
-                      class="btn btn-sm btn-outline-secondary js-view"
-                      data-url="${it.dataUrl}">Ver</button>
-              <a class="btn btn-sm btn-primary"
-                 download="${escapeHtml(fname)}"
-                 href="${it.dataUrl}">Descargar</a>
-            </div>
+            <a class="btn btn-sm btn-primary"
+               download="${escapeHtml(fname)}"
+               href="${it.dataUrl}">
+              Descargar
+            </a>
           </div>
         `;
           })
           .join("");
       }
-
-      // 🔗 Conectar TODOS los botones "Ver" después de pintar el HTML
-      galleryList.querySelectorAll(".js-view").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const dataUrl = btn.dataset.url || btn.getAttribute("data-url");
-          if (dataUrl) openPdfDataUrl(dataUrl);
-        });
-      });
 
       modal.show();
     });
