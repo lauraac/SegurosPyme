@@ -94,8 +94,8 @@
             <div class="kpi-card rounded-4 p-4 bg-white shadow-sm h-100">
               <div class="text-secondary mb-2">Cotizaciones del Mes</div>
               <div class="d-flex align-items-center justify-content-between">
-                <div class="kpi-value">24</div>
-                <div class="kpi-icon kpi-blue">
+                <div class="kpi-value" id="kpi-quotes-this-month">0</div>
+                <div class="kpi-icon kpi-blue" id="kpi-open-gallery">
                   <i class="bi bi-calculator"></i>
                 </div>
               </div>
@@ -241,6 +241,36 @@
         </section>
       </div>
     </main>
+    <!-- Galería de PDFs -->
+    <div
+      class="modal fade"
+      id="pdfGalleryModal"
+      tabindex="-1"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Mis cotizaciones (PDF)</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Cerrar"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <div id="pdf-gallery-list" class="list-group"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="./dashboard.js"></script>
   </body>

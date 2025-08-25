@@ -51,6 +51,29 @@ function prettyDate(d) {
   const dt = new Date(d);
   return isNaN(dt) ? String(d) : dt.toLocaleDateString();
 }
+// === Biblioteca de PDFs (por usuario/empresa) ===
+const MAX_STORED_PDFS = 8;
+const pdfLibKey = (u, c) => `sp:pdfLib:${slug(u)}:${slug(c)}`;
+
+function addPdfToLibrary({ kind, title, filename, dataUrl, meta }) {
+  try {
+    const key = pdfLibKey(USER_NAME, USER_COMPANY);
+    const item = {
+      id: crypto.randomUUID?.() || String(Date.now()),
+      kind, // "pyme" | "presupuesto" | "pyme_pdf"
+      title, // texto visible
+      filename, // nombre sugerido
+      dataUrl, // "data:application/pdf;base64,...."
+      meta: meta || {}, // lo que quieras guardar (input, precios, etc.)
+      createdAt: new Date().toISOString(),
+    };
+    const arr = JSON.parse(localStorage.getItem(key) || "[]");
+    const next = [item, ...arr].slice(0, MAX_STORED_PDFS);
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch (e) {
+    console.warn("No se pudo guardar PDF en la biblioteca:", e);
+  }
+}
 
 /* ======= TARIFAS Y COBERTURAS (demo) ======= */
 const COBERTURAS = {
@@ -750,6 +773,17 @@ async function descargarPDFPresupuesto() {
   try {
     localStorage.setItem("lastQuote", JSON.stringify(miniQuote));
   } catch {}
+  const dataUrl = doc.output("datauristring");
+  addPdfToLibrary({
+    kind: "presupuesto",
+    title: `${miniQuote.cliente || USER_NAME} • Presupuesto`,
+    filename: `Presupuesto_${slug(
+      miniQuote.cliente || USER_NAME || "cliente"
+    )}.pdf`,
+    dataUrl,
+    meta: miniQuote,
+  });
+
   doc.save(
     `Presupuesto_${slug(miniQuote.cliente || USER_NAME || "cliente")}.pdf`
   );
@@ -765,20 +799,16 @@ async function descargarPDFPresupuesto() {
 }
 
 async function descargarPDFPyME(quoteResult) {
-  // Carga jsPDF si hace falta
   if (!(await ensureJsPDF())) {
     alert("Falta jsPDF.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
-
-  // 👇 A4 horizontal y unidades en puntos
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const M = 36; // margen
-
+  const M = 36;
   const violet = { r: 100, g: 75, b: 243 };
 
   // ===== Encabezado
@@ -801,7 +831,7 @@ async function descargarPDFPyME(quoteResult) {
   putKV("Negocio", input.negocioNombre || "—");
   putKV("Actividad", input.actividadPrincipal || "—");
 
-  // ===== Resumen de sumas (cajita)
+  // ===== Resumen de sumas
   y += 6;
   const boxW = W - M * 2;
   const boxH = 110;
@@ -817,12 +847,11 @@ async function descargarPDFPyME(quoteResult) {
   putRow("Electrónicos", input.sumaElectronicos);
   putRow("Cristales", input.sumaCristales);
 
-  // ===== Tres tarjetas de planes en una sola página
+  // ===== Tarjetas de planes
   const colGap = 16;
-  const cardW = (W - M * 2 - colGap * 2) / 3; // 3 columnas
+  const cardW = (W - M * 2 - colGap * 2) / 3;
   const cardH = H - (y + boxH + 36) - M;
   const startY = y + boxH + 36;
-
   const byName = {};
   planes.forEach((p) => (byName[p.nombrePlan] = p));
 
@@ -851,11 +880,25 @@ async function descargarPDFPyME(quoteResult) {
     cardH
   );
 
-  // ===== Guardar
+  // ===== Nombre correcto y guardado en biblioteca
   const fname = `Cotizacion_PyME_${slug(input.negocioNombre || "negocio")}.pdf`;
+  try {
+    const dataUrl = doc.output("datauristring");
+    addPdfToLibrary({
+      kind: "pyme",
+      title: `${input.negocioNombre || "Negocio"} • ${prettyDate(fecha)}`,
+      filename: fname,
+      dataUrl,
+      meta: quoteResult,
+    });
+  } catch (e) {
+    console.warn("No se pudo generar dataURL para biblioteca:", e);
+  }
+
+  // Descargar
   doc.save(fname);
 
-  // ---------- Helpers locales ----------
+  // ---------- Helpers ----------
   function putKV(k, v) {
     doc.setFont("helvetica", "normal");
     doc.text(`${k}:`, M, y);
@@ -870,24 +913,18 @@ async function descargarPDFPyME(quoteResult) {
     doc.text(money(value || 0), M + 270, ry, { align: "left" });
     ry += 16;
   }
-
   function renderPlanCard(plan, title, x, y, w, h) {
-    // marco
     doc.setDrawColor(223);
     doc.roundedRect(x, y, w, h, 10, 10, "S");
-
-    // título
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.text(title, x + 14, y + 24);
 
-    // cabecera tabla
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     let yy = y + 44;
     doc.text("Coberturas:", x + 14, yy);
     yy += 12;
-
     doc.setFont("helvetica", "bold");
     doc.text("Cobertura", x + 14, yy);
     doc.text("Suma (MXN)", x + w - 165, yy);
@@ -899,7 +936,7 @@ async function descargarPDFPyME(quoteResult) {
       doc.text("—", x + 14, yy + 2);
       yy += 14;
     } else {
-      const maxRows = 9; // ✨ ajustar si quieres más/menos filas
+      const maxRows = 9;
       plan.coberturas.slice(0, maxRows).forEach((cob) => {
         doc.text(String(cob.descripcion), x + 14, yy);
         doc.text(money(cob.suma), x + w - 165, yy);
@@ -916,7 +953,6 @@ async function descargarPDFPyME(quoteResult) {
       }
     }
 
-    // resumen de importes del plan
     yy += 6;
     doc.setFont("helvetica", "bold");
     doc.text("Resumen:", x + 14, yy);
@@ -927,7 +963,6 @@ async function descargarPDFPyME(quoteResult) {
     putSum("Derechos", plan?.derechos);
     putSum("IVA", plan?.iva);
     putSum("Prima Total", plan?.primaTotal);
-
     function putSum(label, value) {
       doc.text(label, x + 14, yy);
       doc.text(money(value || 0), x + w - 72, yy);
@@ -1068,6 +1103,20 @@ async function descargarPDFPlantillaLia(payload) {
   const fname = `Cotizacion_PyME_${slug(
     payload?.empresa?.nombre || "empresa"
   )}.pdf`;
+  // Guardar en biblioteca
+  try {
+    const dataUrl = doc.output("datauristring");
+    addPdfToLibrary({
+      kind: "pyme_pdf",
+      title: `Cotización Lia • ${payload?.empresa?.nombre || "-"}`,
+      filename: fname,
+      dataUrl,
+      meta: payload,
+    });
+  } catch (e) {
+    console.warn("No se pudo generar dataURL para biblioteca:", e);
+  }
+
   doc.save(fname);
 }
 
