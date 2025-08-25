@@ -422,10 +422,8 @@ async function processPyMEAndOfferDownload(inputObj, validezDias = 30) {
 
   // habilita botón y guarda
   if (pdfBtn) pdfBtn.disabled = false;
-  addMessage(
-    "Sistema",
-    "✅ Cotización PyME armada. Ya puedes descargar el PDF."
-  );
+  addMessage("Lia", "✅ Cotización armada. Ya puedes descargar el PDF.");
+
   window._lastPyME = quoteResult;
   saveQuoteForDashboard(quoteResult, "pyme");
 
