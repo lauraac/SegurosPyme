@@ -4,17 +4,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
 
-  // ================= Helpers =================
+  // ================ Helpers =================
   const validarEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-// ❌ Elimina estas funciones:
-// function inferGenderByName(...) { ... }
 
-// ❌ Reemplaza TODO getWelcomeTitle() por:
-function getWelcomeTitle() {
-  const name = (localStorage.getItem("userName") || "").trim();
-  return name ? `¡Hola, ${name}!` : "¡Hola!`;
-}
-
+  // Saludo neutro (sin género)
+  function getWelcomeTitle() {
+    const name = (localStorage.getItem("userName") || "").trim();
+    return name ? `¡Hola, ${name}!` : "¡Hola!";
+  }
 
   // ================= Submit =================
   form.addEventListener("submit", (e) => {
@@ -65,7 +62,7 @@ function getWelcomeTitle() {
 
     // Compara credenciales
     if (email === savedEmail && password === savedPassword) {
-      // (Opcional) Refresca nombre/empresa en sesión
+      // Refresca nombre/empresa en sesión (opcional)
       const name = localStorage.getItem("userName") || "";
       const company = localStorage.getItem("userCompany") || "";
       if (name) localStorage.setItem("userName", name);
@@ -73,7 +70,7 @@ function getWelcomeTitle() {
 
       Swal.fire({
         icon: "success",
-        title: getWelcomeTitle(), // Bienvenido / Bienvenida / Bienvenid@
+        title: getWelcomeTitle(), // saludo neutro
         html: "<p style='margin:0'>Accediendo a tu panel…</p>",
         showConfirmButton: false,
         timer: 1200,
