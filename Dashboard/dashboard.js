@@ -238,16 +238,60 @@ document.addEventListener("DOMContentLoaded", () => {
     bodyEl.innerHTML = html;
     lastEl.classList.remove("d-none");
   }
-  async function openPdfDataUrl(dataUrl) {
-    try {
-      const resp = await fetch(dataUrl); // toma el data:… como stream
-      const blob = await resp.blob(); // lo convierte a PDF real
-      const url = URL.createObjectURL(blob); // Blob URL (rápido)
-      window.open(url, "_blank", "noopener"); // abre en nueva pestaña
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      alert("No se pudo abrir el PDF.");
-    }
+  function wireGallery() {
+    const openBtn = $("#kpi-open-gallery");
+    const modalEl = $("#pdfGalleryModal");
+    if (!openBtn || !modalEl) return;
+
+    const galleryList = $("#pdf-gallery-list");
+    const modal = new bootstrap.Modal(modalEl);
+
+    openBtn.addEventListener("click", () => {
+      const arr = readPdfLibrary();
+      if (!galleryList) return;
+
+      if (!arr.length) {
+        galleryList.innerHTML = `<div class="list-group-item text-secondary">No hay PDFs aún.</div>`;
+      } else {
+        galleryList.innerHTML = arr
+          .map((it) => {
+            const d = new Date(it.createdAt || 0).toLocaleString();
+            const kind =
+              (it.kind === "pyme" && "PyME") ||
+              (it.kind === "presupuesto" && "Presupuesto") ||
+              (it.kind === "pyme_pdf" && "PyME") ||
+              "PDF";
+            const fname = it.filename || "Cotizacion.pdf";
+            return `
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="me-3">
+              <div class="fw-700">${escapeHtml(it.title || fname)}</div>
+              <small class="text-secondary">${d} · ${kind}</small>
+            </div>
+            <div class="btn-group">
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary js-view"
+                      data-url="${it.dataUrl}">Ver</button>
+              <a class="btn btn-sm btn-primary"
+                 download="${escapeHtml(fname)}"
+                 href="${it.dataUrl}">Descargar</a>
+            </div>
+          </div>
+        `;
+          })
+          .join("");
+      }
+
+      // 🔗 Conectar TODOS los botones "Ver" después de pintar el HTML
+      galleryList.querySelectorAll(".js-view").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dataUrl = btn.dataset.url || btn.getAttribute("data-url");
+          if (dataUrl) openPdfDataUrl(dataUrl);
+        });
+      });
+
+      modal.show();
+    });
   }
 
   /* ============== Galería (con Ver/Descargar) ============== */
