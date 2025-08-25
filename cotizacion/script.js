@@ -11,6 +11,7 @@ const messagesEl = document.getElementById("messages");
 const pdfBtn = document.getElementById("pdf-btn");
 const backBtn = document.getElementById("back-btn");
 const logoutBtn = document.getElementById("logout-btn");
+let IS_SENDING = false;
 
 /* ================== Utils ================== */
 function slug(s) {
@@ -543,7 +544,7 @@ async function tryExtractCotizacionPyMEPDF(text) {
   saveQuoteForDashboard(wrapped, "pyme_pdf");
 
   if (pdfBtn) pdfBtn.disabled = false;
-  addMessage("Sistema", "✅ Cotización generada. Descargando PDF…");
+  addMessage("Lia", "✅ Cotización generada. Descargando PDF…");
   try {
     await descargarPDFPlantillaLia(obj);
   } catch (e) {
@@ -583,35 +584,42 @@ function sanitizeAssistantReply(text) {
 
 /* ================== Envío de mensaje ================== */
 async function sendMessage() {
+  if (IS_SENDING) return; // 🔒 evita doble envío
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  updateStateFromUser(userMessage);
-  tryCaptureAmountFromUserReply(userMessage);
+  IS_SENDING = true;
+  try {
+    updateStateFromUser(userMessage);
+    tryCaptureAmountFromUserReply(userMessage);
 
-  const bulk = parseBulkPyMEMessage(userMessage);
-  if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
-  if (bulk.actividadPrincipal)
-    PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
-  if (bulk.negocioNombre || bulk.actividadPrincipal) savePymeState();
-  if (bulk.sumaContenido != null)
-    CURRENT_INPUT.sumaContenido = bulk.sumaContenido;
-  if (bulk.sumaEdificio != null) CURRENT_INPUT.sumaEdificio = bulk.sumaEdificio;
-  if (bulk.sumaValoresCaja != null)
-    CURRENT_INPUT.sumaValoresCaja = bulk.sumaValoresCaja;
-  if (bulk.sumaValoresTransito != null)
-    CURRENT_INPUT.sumaValoresTransito = bulk.sumaValoresTransito;
-  if (bulk.sumaElectronicos != null)
-    CURRENT_INPUT.sumaElectronicos = bulk.sumaElectronicos;
-  if (bulk.sumaCristales != null)
-    CURRENT_INPUT.sumaCristales = bulk.sumaCristales;
+    const bulk = parseBulkPyMEMessage(userMessage);
+    if (bulk.negocioNombre) PYME_STATE.negocioNombre = bulk.negocioNombre;
+    if (bulk.actividadPrincipal)
+      PYME_STATE.actividadPrincipal = bulk.actividadPrincipal;
+    if (bulk.negocioNombre || bulk.actividadPrincipal) savePymeState();
+    if (bulk.sumaContenido != null)
+      CURRENT_INPUT.sumaContenido = bulk.sumaContenido;
+    if (bulk.sumaEdificio != null)
+      CURRENT_INPUT.sumaEdificio = bulk.sumaEdificio;
+    if (bulk.sumaValoresCaja != null)
+      CURRENT_INPUT.sumaValoresCaja = bulk.sumaValoresCaja;
+    if (bulk.sumaValoresTransito != null)
+      CURRENT_INPUT.sumaValoresTransito = bulk.sumaValoresTransito;
+    if (bulk.sumaElectronicos != null)
+      CURRENT_INPUT.sumaElectronicos = bulk.sumaElectronicos;
+    if (bulk.sumaCristales != null)
+      CURRENT_INPUT.sumaCristales = bulk.sumaCristales;
 
-  pushHistory("user", userMessage);
-  addMessage("Tú", userMessage);
-  input.value = "";
-  input.focus();
+    pushHistory("user", userMessage);
+    addMessage("Tú", userMessage);
+    input.value = "";
+    input.focus();
 
-  await sendMessageInternal(userMessage, true);
+    await sendMessageInternal(userMessage, true);
+  } finally {
+    IS_SENDING = false; // 🔓 libera el envío
+  }
 }
 
 /* ================== Enviar al backend ================== */
@@ -662,22 +670,9 @@ async function sendMessageInternal(userMessage, withContext = false) {
     await tryExtractMiniQuote(data.reply);
     await tryExtractPymeQuote(data.reply);
     await tryExtractCotizacionPyMEPDF(data.reply);
-
-    if (!window._lastPyME) {
-      const parsed = parseReplyObject(data.reply);
-      if (parsed?.event === "pyme_fields_ok") {
-        await processPyMEAndOfferDownload(
-          parsed.input,
-          Number(parsed.validezDias || 30)
-        );
-      } else if (parsed?.pyme_fields_ok === true) {
-        const inputObj = buildInputFromState();
-        await processPyMEAndOfferDownload(inputObj, 30);
-      }
-    }
   } catch (err) {
     console.error(err);
-    addMessage("Sistema", `⚠️ ${err.message}`);
+    addMessage("Lia", `⚠️ ${err.message}`);
   }
 }
 
@@ -1165,7 +1160,7 @@ logoutBtn?.addEventListener("click", () => {
 document.getElementById("new-quote")?.addEventListener("click", () => {
   resetConversationState();
   addMessage(
-    "Sistema",
+    "Lia",
     "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización PyME"
   );
 });
@@ -1219,6 +1214,6 @@ async function pollThread(tid) {
     }
   } catch (e) {
     console.error(e);
-    addMessage("Sistema", `⚠️ ${e.message}`);
+    addMessage("Lia", `⚠️ ${e.message}`);
   }
 }
