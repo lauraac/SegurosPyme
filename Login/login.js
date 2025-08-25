@@ -6,29 +6,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ================= Helpers =================
   const validarEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+// ❌ Elimina estas funciones:
+// function inferGenderByName(...) { ... }
 
-  // Heurística simple por nombre: termina en "a" => F, termina en "o" => M
-  function inferGenderByName(name = "") {
-    const n = (name || "").trim().toLowerCase();
-    if (!n) return null;
-    if (n.endsWith("a")) return "F";
-    if (n.endsWith("o")) return "M";
-    return null; // no concluyente
-  }
+// ❌ Reemplaza TODO getWelcomeTitle() por:
+function getWelcomeTitle() {
+  const name = (localStorage.getItem("userName") || "").trim();
+  return name ? `¡Hola, ${name}!` : "¡Hola!`;
+}
 
-  function getWelcomeTitle() {
-    const stored = (localStorage.getItem("userGender") || "").toUpperCase(); // "F" | "M"
-    if (stored === "M") return "¡Bienvenido!";
-    if (stored === "F") return "¡Bienvenida!";
-
-    // Si no hay género guardado, intenta inferir por el nombre
-    const guessed = inferGenderByName(localStorage.getItem("userName") || "");
-    if (guessed === "M") return "¡Bienvenido!";
-    if (guessed === "F") return "¡Bienvenida!";
-
-    // Neutro si no se puede inferir
-    return "¡Bienvenid@!";
-  }
 
   // ================= Submit =================
   form.addEventListener("submit", (e) => {
