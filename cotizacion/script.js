@@ -988,14 +988,19 @@ async function descargarPDFPyME(quoteResult) {
   }
   function renderPlanCard(plan, title, x, y, w, h) {
     const pad = 14;
-    const GAP = 10;
-    const NUM_COL_W = 78;
 
+    // Más aire entre columnas y un pequeño "guard band" para el wrap
+    const GAP = 16;
+    const PRIMA_COL_W = 78; // ancho reservado para la columna "Prima"
+    const SUMA_COL_W = 86; // ancho reservado para "Suma"
+
+    // Bordes derechos de cada columna (desde la derecha hacia la izquierda)
     const primaRight = x + w - pad;
-    const sumaRight = primaRight - NUM_COL_W - GAP;
+    const sumaRight = primaRight - PRIMA_COL_W - GAP;
+
     const descLeft = x + pad;
     const descRight = sumaRight - GAP;
-    const descWidth = Math.max(80, descRight - descLeft);
+    const descWidth = Math.max(90, descRight - descLeft - 10); // ← guard band
 
     // Marco y título
     doc.setDrawColor(223);
@@ -1027,18 +1032,20 @@ async function descargarPDFPyME(quoteResult) {
         ? plan.coberturas
         : [{ descripcion: "—", suma: 0, prima: null }];
 
-    // Reserva para el bloque "Resumen"
-    const SUMMARY_BLOCK = 6 + 14 + 5 * 13 + 8; // ≈93px
+    // Reserva para "Resumen"
+    const SUMMARY_BLOCK = 6 + 14 + 5 * 13 + 8; // ≈ 93 px
     const maxYY = y + h - SUMMARY_BLOCK;
 
     let hidden = 0,
       shown = 0;
     for (const cob of rows) {
+      // Forzamos wrap un poco antes con descWidth
       const lines = doc.splitTextToSize(
         String(cob.descripcion || "—"),
         descWidth
       );
       const rowHeight = 11 * lines.length + 4;
+
       if (yy + rowHeight > maxYY) {
         hidden = rows.length - shown;
         break;
@@ -1048,6 +1055,7 @@ async function descargarPDFPyME(quoteResult) {
       doc.text(money(cob.suma || 0), sumaRight, yy, { align: "right" });
       const primaTxt = cob.prima == null ? "—" : money(cob.prima);
       doc.text(primaTxt, primaRight, yy, { align: "right" });
+
       yy += rowHeight;
       shown++;
     }
@@ -1058,7 +1066,7 @@ async function descargarPDFPyME(quoteResult) {
       doc.setFont("helvetica", "normal");
     }
 
-    // Resumen (una sola vez)
+    // Resumen
     yy = Math.max(yy + 10, y + h - SUMMARY_BLOCK + 6);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
