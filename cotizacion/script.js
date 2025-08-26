@@ -78,91 +78,165 @@ function addPdfToLibrary({ kind, title, filename, dataUrl, meta }) {
   }
 }
 
-/* ======= TARIFAS Y COBERTURAS (demo) ======= */
-const COBERTURAS = {
-  CONT: {
-    clave: "CONT",
-    descripcion: "Contenido",
-    obligatoria: true,
-    tarifa: 0.002,
+/* ======= TARIFAS Y COBERTURAS (según tabla) ======= */
+
+/* 1) Tasa base por actividad (tabla “Tarifa base por actividad”) */
+const BASE_RATE_BY_ACTIVITY = [
+  {
+    match: /libreri[aá]s|perfumer[ií]as|[óo]pticas|oficinas|jugueter[ií]as/i,
+    rate: 0.8,
   },
-  EDIF: {
-    clave: "EDIF",
-    descripcion: "Edificio",
-    obligatoria: false,
-    tarifa: 0.0015,
+  {
+    match:
+      /minimercados|mini\s*mercados|helader[ií]as|panader[ií]as|indumentaria/i,
+    rate: 1.1,
   },
-  VCJA: {
-    clave: "VCJA",
-    descripcion: "Valores en caja",
-    obligatoria: false,
-    tarifa: 0.003,
+  {
+    match: /restaurantes(?!.*freidoras)|gimnasios|tiendas\s+grandes/i,
+    rate: 1.6,
   },
-  VTRA: {
-    clave: "VTRA",
-    descripcion: "Valores en tránsito",
-    obligatoria: false,
-    tarifa: 0.0035,
+  {
+    match:
+      /talleres\s+mec[aá]nicos|electrodom[eé]sticos|cocinas\s+activas|freidoras/i,
+    rate: 2.2,
   },
-  ELEC: {
-    clave: "ELEC",
-    descripcion: "Equipos electrónicos",
-    obligatoria: false,
-    tarifa: 0.0028,
+  {
+    match: /inflamables|inundable[s]?|alto|inspecci[oó]n|coberturas altas/i,
+    rate: 3.0,
   },
-  CRIS: {
-    clave: "CRIS",
-    descripcion: "Cristales",
-    obligatoria: false,
-    tarifa: 0.0012,
-  },
+];
+
+/* 2) Matriz de coberturas por plan (según la tabla con las X) */
+const PLAN_MATRIX = {
+  Base: [
+    "incendio_edificio_contenidos",
+    "responsabilidad_civil",
+    "limpieza_escombros",
+    "robo",
+  ],
+  Medio: [
+    "incendio_edificio_contenidos",
+    "responsabilidad_civil",
+    "limpieza_escombros",
+    "robo",
+    "robo_valores_caja_transito",
+    "perdida_beneficios",
+    "equipos_electronicos",
+  ],
+  Plus: [
+    "incendio_edificio_contenidos",
+    "responsabilidad_civil",
+    "limpieza_escombros",
+    "robo",
+    "robo_valores_caja_transito",
+    "perdida_beneficios",
+    "equipos_electronicos",
+    "danios_electricos",
+    "danios_agua",
+    "cristales",
+  ],
 };
-const PLANES = {
-  Base: (c) => c.obligatoria === true,
-  Medio: (c) => c.obligatoria === true,
-  Plus: (c, actividad) => c.obligatoria === true || aplicaExtra(c, actividad),
+
+/* 3) Mapa de recargos por cobertura adicional (porcentaje anual) */
+/*    TODO: coloca aquí los números reales de tu documento.
+      Solo dejé cristales=0.05% porque te lo confirmaron. Los demás ponlos tú. */
+const COVERAGE_SURCHARGE = {
+  // Básicas (ya incluidas en la tasa base):
+  incendio_edificio_contenidos: 0,
+  responsabilidad_civil: 0,
+  limpieza_escombros: 0,
+  robo: 0,
+
+  // Adicionales — RELLENA con tus % reales del documento:
+  robo_valores_caja_transito: 0.3, // EJEMPLO: 0.30%  ← cambia por el real
+  perdida_beneficios: 0.4, // EJEMPLO: 0.40%  ← cambia por el real
+  equipos_electronicos: 0.28, // EJEMPLO: 0.28%  ← cambia por el real
+  danios_electricos: 0.2, // EJEMPLO: 0.20%  ← cambia por el real
+  danios_agua: 0.15, // EJEMPLO: 0.15%  ← cambia por el real
+  cristales: 0.05, // ✔ confirmado
 };
-function aplicaExtra(c, actividad) {
-  const act = String(actividad || "").toLowerCase();
-  if (act.includes("restaurante")) return ["CRIS", "ELEC"].includes(c.clave);
-  return false;
+
+/* 4) Cómo mapeamos tus “sumas” del chat a coberturas */
+function coverageSumaMap(input) {
+  const m = {
+    incendio_edificio_contenidos:
+      Number(input.sumaContenido || 0) + Number(input.sumaEdificio || 0),
+    responsabilidad_civil: 0, // si después te dan una suma para RC, mapea aquí
+    limpieza_escombros: 0,
+    robo: 0,
+    robo_valores_caja_transito:
+      Number(input.sumaValoresCaja || 0) +
+      Number(input.sumaValoresTransito || 0),
+    perdida_beneficios: 0, // si te dan una suma aparte, mapea aquí
+    equipos_electronicos: Number(input.sumaElectronicos || 0),
+    danios_electricos: 0, // si te dan suma aparte, mapea
+    danios_agua: 0, // idem
+    cristales: Number(input.sumaCristales || 0),
+  };
+  return m;
 }
-function computePremium(items) {
-  const primaNeta = items.reduce((acc, i) => acc + i.suma * i.tarifa, 0);
-  const gastosExpedicion = 150;
+
+/* 5) Detecta la tasa base por actividad (primer match; si nada, usa 1.6 como “medio”) */
+function baseRateForActivity(actividad = "") {
+  const t = String(actividad || "");
+  for (const row of BASE_RATE_BY_ACTIVITY) {
+    if (row.match.test(t)) return row.rate;
+  }
+  return 1.6; // por defecto “Medio”
+}
+
+/* 6) Calcula premio por plan con la fórmula:  Precio = (SA * TasaTotal)/100 */
+function computePlanPremiumFromMatrix(planName, input) {
+  const inc = PLAN_MATRIX[planName] || [];
+  const base = baseRateForActivity(input.actividadPrincipal);
+  const surcharges = inc.reduce(
+    (acc, key) => acc + (COVERAGE_SURCHARGE[key] || 0),
+    0
+  );
+  const tasaTotal = base + surcharges; // porcentaje anual total del plan
+
+  const sumas = coverageSumaMap(input);
+  // SA del plan = suma de las sumas de las coberturas que incluye ese plan
+  const SA = inc.reduce((acc, key) => acc + (Number(sumas[key]) || 0), 0);
+
+  const primaNeta = (SA * tasaTotal) / 100;
+  const gastosExpedicion = SA > 0 ? 150 : 0;
   const derechos = 0;
   const iva = (primaNeta + gastosExpedicion + derechos) * 0.16;
   const primaTotal = primaNeta + gastosExpedicion + derechos + iva;
-  return { primaNeta, gastosExpedicion, derechos, iva, primaTotal };
-}
-function buildPlansFromInput(input) {
-  const mapa = {
-    CONT: Number(input.sumaContenido || 0),
-    EDIF: Number(input.sumaEdificio || 0),
-    VCJA: Number(input.sumaValoresCaja || 0),
-    VTRA: Number(input.sumaValoresTransito || 0),
-    ELEC: Number(input.sumaElectronicos || 0),
-    CRIS: Number(input.sumaCristales || 0),
+
+  // Devolvemos también el detalle de coberturas con su SA (para la tarjeta del PDF)
+  const detalle = inc.map((key) => ({
+    clave: key,
+    descripcion: key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase()),
+    suma: Number(sumas[key]) || 0,
+    prima: null, // aquí ya no prorrateamos por cobertura; el plan usa tasa global
+  }));
+
+  return {
+    nombrePlan: planName,
+    tasaBase: base,
+    recargos: surcharges,
+    tasaTotal,
+    SA,
+    coberturas: detalle,
+    primaNeta,
+    gastosExpedicion,
+    derechos,
+    iva,
+    primaTotal,
   };
-  const cobList = Object.values(COBERTURAS);
-  function makePlan(nombre) {
-    const filtra = PLANES[nombre];
-    const seleccion = cobList
-      .filter((c) => filtra(c, input.actividadPrincipal))
-      .filter((c) => (mapa[c.clave] || 0) > 0);
-    const detalle = seleccion.map((c) => ({
-      clave: c.clave,
-      descripcion: c.descripcion,
-      suma: mapa[c.clave],
-      tarifa: c.tarifa,
-      prima: mapa[c.clave] * c.tarifa,
-    }));
-    const totales = computePremium(
-      detalle.map((d) => ({ suma: d.suma, tarifa: d.tarifa }))
-    );
-    return { nombrePlan: nombre, coberturas: detalle, ...totales };
-  }
-  return [makePlan("Base"), makePlan("Medio"), makePlan("Plus")];
+}
+
+/* 7) Construye los 3 planes con el esquema nuevo */
+function buildPlansFromInput(input) {
+  return [
+    computePlanPremiumFromMatrix("Base", input),
+    computePlanPremiumFromMatrix("Medio", input),
+    computePlanPremiumFromMatrix("Plus", input),
+  ];
 }
 
 /* ================== Sesión ================== */
@@ -940,17 +1014,13 @@ async function descargarPDFPyME(quoteResult) {
       plan.coberturas.slice(0, maxRows).forEach((cob) => {
         doc.text(String(cob.descripcion), x + 14, yy);
         doc.text(money(cob.suma), x + w - 165, yy);
-        doc.text(money(cob.prima), x + w - 72, yy);
+
+        // Prima por cobertura no se calcula (usa tasa global): mostramos “—”
+        const primaTxt = cob.prima == null ? "—" : money(cob.prima);
+        doc.text(primaTxt, x + w - 72, yy);
+
         yy += 14;
       });
-      if (plan.coberturas.length > maxRows) {
-        doc.text(
-          `… +${plan.coberturas.length - maxRows} coberturas más`,
-          x + 14,
-          yy
-        );
-        yy += 14;
-      }
     }
 
     yy += 6;
