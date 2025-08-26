@@ -106,29 +106,30 @@ const BASE_RATE_BY_ACTIVITY = [
   },
 ];
 
-/* 2) Matriz de coberturas por plan (según la tabla con las X) */
 const PLAN_MATRIX = {
   Base: [
     "incendio_edificio_contenidos",
     "responsabilidad_civil",
     "limpieza_escombros",
     "robo",
+    "cristales", // ← Base también incluye cristales
   ],
   Medio: [
     "incendio_edificio_contenidos",
     "responsabilidad_civil",
     "limpieza_escombros",
     "robo",
-    "robo_valores_caja_transito",
+    "robo_valores_caja", // ← solo caja
     "perdida_beneficios",
-    "equipos_electronicos",
+    "cristales",
   ],
   Plus: [
     "incendio_edificio_contenidos",
     "responsabilidad_civil",
     "limpieza_escombros",
     "robo",
-    "robo_valores_caja_transito",
+    "robo_valores_caja", // caja
+    "robo_valores_transito", // + tránsito
     "perdida_beneficios",
     "equipos_electronicos",
     "danios_electricos",
@@ -141,39 +142,39 @@ const PLAN_MATRIX = {
 /*    TODO: coloca aquí los números reales de tu documento.
       Solo dejé cristales=0.05% porque te lo confirmaron. Los demás ponlos tú. */
 const COVERAGE_SURCHARGE = {
-  // Básicas (ya incluidas en la tasa base):
   incendio_edificio_contenidos: 0,
   responsabilidad_civil: 0,
   limpieza_escombros: 0,
   robo: 0,
 
-  // Adicionales — RELLENA con tus % reales del documento:
-  robo_valores_caja_transito: 0.3, // EJEMPLO: 0.30%  ← cambia por el real
-  perdida_beneficios: 0.4, // EJEMPLO: 0.40%  ← cambia por el real
-  equipos_electronicos: 0.28, // EJEMPLO: 0.28%  ← cambia por el real
-  danios_electricos: 0.2, // EJEMPLO: 0.20%  ← cambia por el real
-  danios_agua: 0.15, // EJEMPLO: 0.15%  ← cambia por el real
-  cristales: 0.05, // ✔ confirmado
+  // ⚠️ Pon aquí tus % reales
+  robo_valores_caja: 0.15, // ej. 0.15%
+  robo_valores_transito: 0.15, // ej. 0.15%
+  perdida_beneficios: 0.4,
+  equipos_electronicos: 0.28,
+  danios_electricos: 0.2,
+  danios_agua: 0.15,
+  cristales: 0.05, // confirmado
 };
 
 /* 4) Cómo mapeamos tus “sumas” del chat a coberturas */
 function coverageSumaMap(input) {
-  const m = {
+  return {
     incendio_edificio_contenidos:
       Number(input.sumaContenido || 0) + Number(input.sumaEdificio || 0),
-    responsabilidad_civil: 0, // si después te dan una suma para RC, mapea aquí
+    responsabilidad_civil: 0,
     limpieza_escombros: 0,
     robo: 0,
-    robo_valores_caja_transito:
-      Number(input.sumaValoresCaja || 0) +
-      Number(input.sumaValoresTransito || 0),
-    perdida_beneficios: 0, // si te dan una suma aparte, mapea aquí
+
+    robo_valores_caja: Number(input.sumaValoresCaja || 0),
+    robo_valores_transito: Number(input.sumaValoresTransito || 0),
+
+    perdida_beneficios: 0,
     equipos_electronicos: Number(input.sumaElectronicos || 0),
-    danios_electricos: 0, // si te dan suma aparte, mapea
-    danios_agua: 0, // idem
+    danios_electricos: 0,
+    danios_agua: 0,
     cristales: Number(input.sumaCristales || 0),
   };
-  return m;
 }
 
 /* 5) Detecta la tasa base por actividad (primer match; si nada, usa 1.6 como “medio”) */
@@ -189,14 +190,20 @@ function baseRateForActivity(actividad = "") {
 function computePlanPremiumFromMatrix(planName, input) {
   const inc = PLAN_MATRIX[planName] || [];
   const base = baseRateForActivity(input.actividadPrincipal);
-  const surcharges = inc.reduce(
-    (acc, key) => acc + (COVERAGE_SURCHARGE[key] || 0),
-    0
-  );
-  const tasaTotal = base + surcharges; // porcentaje anual total del plan
 
+  // ← necesitamos las sumas antes para decidir si recargar o no
   const sumas = coverageSumaMap(input);
-  // SA del plan = suma de las sumas de las coberturas que incluye ese plan
+
+  // Recargos solo para coberturas incluidas con suma > 0
+  const surcharges = inc.reduce((acc, key) => {
+    const recargo = COVERAGE_SURCHARGE[key] || 0;
+    const suma = Number(sumas[key] || 0);
+    return acc + (suma > 0 ? recargo : 0);
+  }, 0);
+
+  const tasaTotal = base + surcharges; // % anual total del plan
+
+  // SA del plan = suma de las sumas de las coberturas incluidas
   const SA = inc.reduce((acc, key) => acc + (Number(sumas[key]) || 0), 0);
 
   const primaNeta = (SA * tasaTotal) / 100;
@@ -205,14 +212,14 @@ function computePlanPremiumFromMatrix(planName, input) {
   const iva = (primaNeta + gastosExpedicion + derechos) * 0.16;
   const primaTotal = primaNeta + gastosExpedicion + derechos + iva;
 
-  // Devolvemos también el detalle de coberturas con su SA (para la tarjeta del PDF)
+  // Detalle por cobertura (sin prorrateo de prima por cobertura)
   const detalle = inc.map((key) => ({
     clave: key,
     descripcion: key
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase()),
     suma: Number(sumas[key]) || 0,
-    prima: null, // aquí ya no prorrateamos por cobertura; el plan usa tasa global
+    prima: null,
   }));
 
   return {
@@ -989,29 +996,26 @@ async function descargarPDFPyME(quoteResult) {
   function renderPlanCard(plan, title, x, y, w, h) {
     const pad = 14;
 
-    // Más aire entre columnas y wrap prudente
+    // columnas
     const GAP = 16;
-    const PRIMA_COL_W = 78; // ancho reservado para "Prima"
-    const SUMA_COL_W = 86; // ancho reservado para "Suma"
-
+    const NUM_COL_W = 78;
     const primaRight = x + w - pad;
-    const sumaRight = primaRight - PRIMA_COL_W - GAP;
-
+    const sumaRight = primaRight - NUM_COL_W - GAP;
     const descLeft = x + pad;
     const descRight = sumaRight - GAP;
-    const descWidth = Math.max(90, descRight - descLeft - 10); // guard band
+    const descWidth = Math.max(90, descRight - descLeft);
 
-    // Marco y título
+    // marco + título
     doc.setDrawColor(223);
     doc.roundedRect(x, y, w, h, 10, 10, "S");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.text(title, x + pad, y + 22);
 
-    // Cabecera compacta
+    // cabecera
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.5);
-    let yy = y + 38;
+    doc.setFontSize(10);
+    let yy = y + 40;
     doc.text("Coberturas:", x + pad, yy);
     yy += 12;
 
@@ -1021,51 +1025,89 @@ async function descargarPDFPyME(quoteResult) {
     doc.text("Prima (MXN)", primaRight, yy, { align: "right" });
     yy += 11;
 
-    // Helper: buscar suma por clave
-    const get = (k) => {
-      const c = (plan?.coberturas || []).find((r) => r.clave === k);
-      return c ? Number(c.suma || 0) : null;
-    };
+    // -------- filas según plan (básicas en una sola línea) --------
+    const included = new Set((plan?.coberturas || []).map((c) => c.clave));
+    const getSuma = (key) =>
+      plan?.coberturas?.find((c) => c.clave === key)?.suma || 0;
 
-    // LISTA FIJA (según lo que pediste)
-    const rows = [
-      {
-        label: "Coberturas básicas (incendio, RC, escombros y robo)",
-        sum: get("incendio_edificio_contenidos"),
-      },
-      {
+    const rows = [];
+    rows.push({
+      label: "Coberturas básicas (incendio, RC, escombros y robo)",
+      sum: getSuma("incendio_edificio_contenidos"),
+    });
+
+    if (included.has("robo_valores_caja"))
+      rows.push({
+        label: "Robo de valores (en caja)",
+        sum: getSuma("robo_valores_caja"),
+      });
+
+    if (included.has("robo_valores_transito"))
+      rows.push({
         label: "Robo de valores en tránsito",
-        sum: get("robo_valores_caja_transito"),
-      },
-      { label: "Pérdida de beneficios", sum: get("perdida_beneficios") },
-      { label: "Electrónicos", sum: get("equipos_electronicos") },
-      { label: "Daños eléctricos", sum: get("danios_electricos") },
-      { label: "Daños por agua", sum: get("danios_agua") },
-      { label: "Cristales", sum: get("cristales") },
-    ];
+        sum: getSuma("robo_valores_transito"),
+      });
 
-    // Filas (siempre entran 7 con este alto + resumen compacto)
+    if (included.has("perdida_beneficios"))
+      rows.push({
+        label: "Pérdida de beneficios",
+        sum: getSuma("perdida_beneficios"),
+      });
+
+    if (included.has("equipos_electronicos"))
+      rows.push({
+        label: "Electrónicos",
+        sum: getSuma("equipos_electronicos"),
+      });
+
+    if (included.has("danios_electricos"))
+      rows.push({
+        label: "Daños eléctricos",
+        sum: getSuma("danios_electricos"),
+      });
+
+    if (included.has("danios_agua"))
+      rows.push({ label: "Daños por agua", sum: getSuma("danios_agua") });
+
+    if (included.has("cristales"))
+      rows.push({ label: "Cristales", sum: getSuma("cristales") });
+
+    // deja espacio para el Resumen y evita que se encime
+    const SUMMARY_BLOCK = 6 + 14 + 4 * 13 + 8; // título + 4 líneas
+    const maxYY = y + h - SUMMARY_BLOCK;
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    const lineH = 11;
-    const rowPad = 2;
-    const spaceForSummary = 60 + 4 * 12; // título + 4 líneas
-    const maxYY = y + h - spaceForSummary;
+    doc.setLineHeightFactor(1.15);
 
-    for (const r of rows) {
-      const lines = doc.splitTextToSize(r.label, descWidth);
-      const rh = lineH * lines.length + rowPad;
-      if (yy + rh > maxYY) break; // seguridad
+    let hidden = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const lines = doc.splitTextToSize(String(r.label), descWidth);
+      const rh = 11 * lines.length + 4;
+
+      if (yy + rh > maxYY) {
+        hidden = rows.length - i;
+        break;
+      }
 
       doc.text(lines, descLeft, yy);
-      const sumaTxt = r.sum != null && r.sum > 0 ? money(r.sum) : "—";
-      doc.text(sumaTxt, sumaRight, yy, { align: "right" });
-      doc.text("—", primaRight, yy, { align: "right" }); // la prima es global por plan
+      doc.text(r.sum > 0 ? money(r.sum) : "—", sumaRight, yy, {
+        align: "right",
+      });
+      doc.text("—", primaRight, yy, { align: "right" }); // prima por cobertura no se prorratea
       yy += rh;
     }
 
-    // Resumen compacto (4 líneas) para que no se pise
-    yy = Math.max(yy + 6, y + h - (4 * 12 + 20));
+    if (hidden > 0) {
+      yy += 6;
+      doc.setFont("helvetica", "italic");
+      doc.text(`… +${hidden} coberturas más`, descLeft, yy);
+      doc.setFont("helvetica", "normal");
+    }
+
+    // -------- Resumen (totales del plan) --------
+    yy = Math.max(yy + 8, y + h - (4 * 13 + 20));
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("Resumen:", x + pad, yy);
@@ -1075,7 +1117,7 @@ async function descargarPDFPyME(quoteResult) {
     const putSum = (label, value) => {
       doc.text(label, x + pad, yy);
       doc.text(money(value || 0), primaRight, yy, { align: "right" });
-      yy += 12;
+      yy += 13;
     };
     putSum("Prima Neta", plan?.primaNeta);
     putSum("Gastos de Expedición", plan?.gastosExpedicion);
