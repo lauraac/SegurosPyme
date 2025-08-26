@@ -989,99 +989,96 @@ async function descargarPDFPyME(quoteResult) {
   function renderPlanCard(plan, title, x, y, w, h) {
     const pad = 14;
 
-    // Más aire entre columnas y un pequeño "guard band" para el wrap
+    // Más aire entre columnas y wrap prudente
     const GAP = 16;
-    const PRIMA_COL_W = 78; // ancho reservado para la columna "Prima"
+    const PRIMA_COL_W = 78; // ancho reservado para "Prima"
     const SUMA_COL_W = 86; // ancho reservado para "Suma"
 
-    // Bordes derechos de cada columna (desde la derecha hacia la izquierda)
     const primaRight = x + w - pad;
     const sumaRight = primaRight - PRIMA_COL_W - GAP;
 
     const descLeft = x + pad;
     const descRight = sumaRight - GAP;
-    const descWidth = Math.max(90, descRight - descLeft - 10); // ← guard band
+    const descWidth = Math.max(90, descRight - descLeft - 10); // guard band
 
     // Marco y título
     doc.setDrawColor(223);
     doc.roundedRect(x, y, w, h, 10, 10, "S");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    doc.text(title, x + pad, y + 24);
+    doc.text(title, x + pad, y + 22);
 
-    // Cabecera
+    // Cabecera compacta
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    let yy = y + 44;
+    doc.setFontSize(9.5);
+    let yy = y + 38;
     doc.text("Coberturas:", x + pad, yy);
-    yy += 14;
+    yy += 12;
 
     doc.setFont("helvetica", "bold");
     doc.text("Cobertura", descLeft, yy);
     doc.text("Suma (MXN)", sumaRight, yy, { align: "right" });
     doc.text("Prima (MXN)", primaRight, yy, { align: "right" });
-    yy += 12;
+    yy += 11;
 
-    // Filas con límite de espacio
+    // Helper: buscar suma por clave
+    const get = (k) => {
+      const c = (plan?.coberturas || []).find((r) => r.clave === k);
+      return c ? Number(c.suma || 0) : null;
+    };
+
+    // LISTA FIJA (según lo que pediste)
+    const rows = [
+      {
+        label: "Coberturas básicas (incendio, RC, escombros y robo)",
+        sum: get("incendio_edificio_contenidos"),
+      },
+      {
+        label: "Robo de valores en tránsito",
+        sum: get("robo_valores_caja_transito"),
+      },
+      { label: "Pérdida de beneficios", sum: get("perdida_beneficios") },
+      { label: "Electrónicos", sum: get("equipos_electronicos") },
+      { label: "Daños eléctricos", sum: get("danios_electricos") },
+      { label: "Daños por agua", sum: get("danios_agua") },
+      { label: "Cristales", sum: get("cristales") },
+    ];
+
+    // Filas (siempre entran 7 con este alto + resumen compacto)
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setLineHeightFactor(1.15);
+    const lineH = 11;
+    const rowPad = 2;
+    const spaceForSummary = 60 + 4 * 12; // título + 4 líneas
+    const maxYY = y + h - spaceForSummary;
 
-    const rows =
-      plan && Array.isArray(plan.coberturas) && plan.coberturas.length
-        ? plan.coberturas
-        : [{ descripcion: "—", suma: 0, prima: null }];
-
-    // Reserva para "Resumen"
-    const SUMMARY_BLOCK = 6 + 14 + 5 * 13 + 8; // ≈ 93 px
-    const maxYY = y + h - SUMMARY_BLOCK;
-
-    let hidden = 0,
-      shown = 0;
-    for (const cob of rows) {
-      // Forzamos wrap un poco antes con descWidth
-      const lines = doc.splitTextToSize(
-        String(cob.descripcion || "—"),
-        descWidth
-      );
-      const rowHeight = 11 * lines.length + 4;
-
-      if (yy + rowHeight > maxYY) {
-        hidden = rows.length - shown;
-        break;
-      }
+    for (const r of rows) {
+      const lines = doc.splitTextToSize(r.label, descWidth);
+      const rh = lineH * lines.length + rowPad;
+      if (yy + rh > maxYY) break; // seguridad
 
       doc.text(lines, descLeft, yy);
-      doc.text(money(cob.suma || 0), sumaRight, yy, { align: "right" });
-      const primaTxt = cob.prima == null ? "—" : money(cob.prima);
-      doc.text(primaTxt, primaRight, yy, { align: "right" });
-
-      yy += rowHeight;
-      shown++;
-    }
-    if (hidden > 0) {
-      yy += 6;
-      doc.setFont("helvetica", "italic");
-      doc.text(`… +${hidden} coberturas más`, descLeft, yy);
-      doc.setFont("helvetica", "normal");
+      const sumaTxt = r.sum != null && r.sum > 0 ? money(r.sum) : "—";
+      doc.text(sumaTxt, sumaRight, yy, { align: "right" });
+      doc.text("—", primaRight, yy, { align: "right" }); // la prima es global por plan
+      yy += rh;
     }
 
-    // Resumen
-    yy = Math.max(yy + 10, y + h - SUMMARY_BLOCK + 6);
+    // Resumen compacto (4 líneas) para que no se pise
+    yy = Math.max(yy + 6, y + h - (4 * 12 + 20));
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("Resumen:", x + pad, yy);
-    yy += 14;
+    yy += 13;
 
     doc.setFont("helvetica", "normal");
     const putSum = (label, value) => {
       doc.text(label, x + pad, yy);
       doc.text(money(value || 0), primaRight, yy, { align: "right" });
-      yy += 13;
+      yy += 12;
     };
     putSum("Prima Neta", plan?.primaNeta);
     putSum("Gastos de Expedición", plan?.gastosExpedicion);
-    putSum("Derechos", plan?.derechos);
     putSum("IVA", plan?.iva);
     putSum("Prima Total", plan?.primaTotal);
   }
