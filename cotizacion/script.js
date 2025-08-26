@@ -879,7 +879,8 @@ async function descargarPDFPyME(quoteResult) {
   }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const doc = new jsPDF({ unit: "pt", format: "a4" }); // portrait por default
+
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 36;
@@ -922,35 +923,33 @@ async function descargarPDFPyME(quoteResult) {
   putRow("Cristales", input.sumaCristales);
 
   // ===== Tarjetas de planes
-  const colGap = 12;
-  const cardW = (W - M * 2 - colGap * 2) / 3;
-  const cardH = H - (y + boxH + 36) - M;
-  const startY = y + boxH + 48;
+  // ===== Tarjetas de planes (vertical: 2 columnas)
+  const colGap = 16;
+  const cardW = (W - M * 2 - colGap) / 2;
+  const startY = y + boxH + 32; // un poco de aire tras el resumen
+  const cardH = Math.floor((H - startY - M - colGap) / 2); // altura para 2 filas
+
   const byName = {};
   planes.forEach((p) => (byName[p.nombrePlan] = p));
 
-  renderPlanCard(
-    byName["Base"],
-    "Plan Base",
-    M + 0 * (cardW + colGap),
-    startY,
-    cardW,
-    cardH
-  );
+  // Fila 1: Base y Medio
+  renderPlanCard(byName["Base"], "Plan Base", M, startY, cardW, cardH);
   renderPlanCard(
     byName["Medio"],
     "Plan Medio",
-    M + 1 * (cardW + colGap),
+    M + cardW + colGap,
     startY,
     cardW,
     cardH
   );
+
+  // Fila 2: Plus a lo ancho (ocupa ambas columnas)
   renderPlanCard(
     byName["Plus"],
     "Plan Plus",
-    M + 2 * (cardW + colGap),
-    startY,
-    cardW,
+    M,
+    startY + cardH + colGap,
+    W - M * 2,
     cardH
   );
 
@@ -989,10 +988,9 @@ async function descargarPDFPyME(quoteResult) {
   }
   function renderPlanCard(plan, title, x, y, w, h) {
     const pad = 14;
-    const GAP = 10; // separación entre columnas
-    const NUM_COL_W = 78; // ancho de cada columna numérica
+    const GAP = 10;
+    const NUM_COL_W = 78;
 
-    // Bordes derechos de cada columna (calculados DESDE la derecha)
     const primaRight = x + w - pad;
     const sumaRight = primaRight - NUM_COL_W - GAP;
     const descLeft = x + pad;
@@ -1019,9 +1017,9 @@ async function descargarPDFPyME(quoteResult) {
     doc.text("Prima (MXN)", primaRight, yy, { align: "right" });
     yy += 12;
 
-    // Filas
+    // Filas con límite de espacio
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9); // ← letra ligeramente más chica
+    doc.setFontSize(9);
     doc.setLineHeightFactor(1.15);
 
     const rows =
@@ -1029,40 +1027,55 @@ async function descargarPDFPyME(quoteResult) {
         ? plan.coberturas
         : [{ descripcion: "—", suma: 0, prima: null }];
 
-    rows.forEach((cob) => {
+    // Reserva para el bloque "Resumen"
+    const SUMMARY_BLOCK = 6 + 14 + 5 * 13 + 8; // ≈93px
+    const maxYY = y + h - SUMMARY_BLOCK;
+
+    let hidden = 0,
+      shown = 0;
+    for (const cob of rows) {
       const lines = doc.splitTextToSize(
         String(cob.descripcion || "—"),
         descWidth
       );
-      const rowHeight = 11 * lines.length; // 11pt por línea
+      const rowHeight = 11 * lines.length + 4;
+      if (yy + rowHeight > maxYY) {
+        hidden = rows.length - shown;
+        break;
+      }
 
       doc.text(lines, descLeft, yy);
       doc.text(money(cob.suma || 0), sumaRight, yy, { align: "right" });
       const primaTxt = cob.prima == null ? "—" : money(cob.prima);
       doc.text(primaTxt, primaRight, yy, { align: "right" });
+      yy += rowHeight;
+      shown++;
+    }
+    if (hidden > 0) {
+      yy += 6;
+      doc.setFont("helvetica", "italic");
+      doc.text(`… +${hidden} coberturas más`, descLeft, yy);
+      doc.setFont("helvetica", "normal");
+    }
 
-      yy += rowHeight + 4; // gap entre filas
-    });
-
-    // Resumen
-    yy += 6;
+    // Resumen (una sola vez)
+    yy = Math.max(yy + 10, y + h - SUMMARY_BLOCK + 6);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("Resumen:", x + pad, yy);
     yy += 14;
 
     doc.setFont("helvetica", "normal");
+    const putSum = (label, value) => {
+      doc.text(label, x + pad, yy);
+      doc.text(money(value || 0), primaRight, yy, { align: "right" });
+      yy += 13;
+    };
     putSum("Prima Neta", plan?.primaNeta);
     putSum("Gastos de Expedición", plan?.gastosExpedicion);
     putSum("Derechos", plan?.derechos);
     putSum("IVA", plan?.iva);
     putSum("Prima Total", plan?.primaTotal);
-
-    function putSum(label, value) {
-      doc.text(label, x + pad, yy);
-      doc.text(money(value || 0), primaRight, yy, { align: "right" });
-      yy += 13;
-    }
   }
 }
 
