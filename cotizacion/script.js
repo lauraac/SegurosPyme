@@ -922,10 +922,10 @@ async function descargarPDFPyME(quoteResult) {
   putRow("Cristales", input.sumaCristales);
 
   // ===== Tarjetas de planes
-  const colGap = 16;
+  const colGap = 12;
   const cardW = (W - M * 2 - colGap * 2) / 3;
   const cardH = H - (y + boxH + 36) - M;
-  const startY = y + boxH + 36;
+  const startY = y + boxH + 48;
   const byName = {};
   planes.forEach((p) => (byName[p.nombrePlan] = p));
 
@@ -989,20 +989,19 @@ async function descargarPDFPyME(quoteResult) {
   }
   function renderPlanCard(plan, title, x, y, w, h) {
     const pad = 14;
-    const rowGap = 4;
+    const GAP = 10; // separación entre columnas
+    const NUM_COL_W = 78; // ancho de cada columna numérica
 
-    // Columnas fijas
-    const COL = {
-      desc: x + pad, // inicio descripción
-      suma: x + w - 150, // borde derecho Suma
-      prima: x + w - pad, // borde derecho Prima
-    };
-    const descWidth = COL.suma - COL.desc - 12; // ancho útil de descripción
+    // Bordes derechos de cada columna (calculados DESDE la derecha)
+    const primaRight = x + w - pad;
+    const sumaRight = primaRight - NUM_COL_W - GAP;
+    const descLeft = x + pad;
+    const descRight = sumaRight - GAP;
+    const descWidth = Math.max(80, descRight - descLeft);
 
     // Marco y título
     doc.setDrawColor(223);
     doc.roundedRect(x, y, w, h, 10, 10, "S");
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.text(title, x + pad, y + 24);
@@ -1015,13 +1014,14 @@ async function descargarPDFPyME(quoteResult) {
     yy += 14;
 
     doc.setFont("helvetica", "bold");
-    doc.text("Cobertura", COL.desc, yy);
-    doc.text("Suma (MXN)", COL.suma, yy, { align: "right" });
-    doc.text("Prima (MXN)", COL.prima, yy, { align: "right" });
+    doc.text("Cobertura", descLeft, yy);
+    doc.text("Suma (MXN)", sumaRight, yy, { align: "right" });
+    doc.text("Prima (MXN)", primaRight, yy, { align: "right" });
     yy += 12;
 
     // Filas
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9); // ← letra ligeramente más chica
     doc.setLineHeightFactor(1.15);
 
     const rows =
@@ -1034,19 +1034,20 @@ async function descargarPDFPyME(quoteResult) {
         String(cob.descripcion || "—"),
         descWidth
       );
-      const rowHeight = 12 * lines.length;
+      const rowHeight = 11 * lines.length; // 11pt por línea
 
-      doc.text(lines, COL.desc, yy);
-      doc.text(money(cob.suma || 0), COL.suma, yy, { align: "right" });
+      doc.text(lines, descLeft, yy);
+      doc.text(money(cob.suma || 0), sumaRight, yy, { align: "right" });
       const primaTxt = cob.prima == null ? "—" : money(cob.prima);
-      doc.text(primaTxt, COL.prima, yy, { align: "right" });
+      doc.text(primaTxt, primaRight, yy, { align: "right" });
 
-      yy += rowHeight + rowGap;
+      yy += rowHeight + 4; // gap entre filas
     });
 
     // Resumen
     yy += 6;
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
     doc.text("Resumen:", x + pad, yy);
     yy += 14;
 
@@ -1059,8 +1060,8 @@ async function descargarPDFPyME(quoteResult) {
 
     function putSum(label, value) {
       doc.text(label, x + pad, yy);
-      doc.text(money(value || 0), COL.prima, yy, { align: "right" });
-      yy += 14;
+      doc.text(money(value || 0), primaRight, yy, { align: "right" });
+      yy += 13;
     }
   }
 }
