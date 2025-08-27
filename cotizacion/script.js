@@ -774,6 +774,26 @@ async function sendMessageInternal(userMessage, withContext = false) {
     addMessage("Lia", `⚠️ ${err.message}`);
   }
 }
+function hasAnyHistoryForUser() {
+  try {
+    const hasThread = !!localStorage.getItem(threadKey());
+
+    const stateKey = `sp:pymeState:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+    const stateRaw = localStorage.getItem(stateKey);
+    const hasState = !!stateRaw && stateRaw !== "{}";
+
+    const hasLastQuote = !!localStorage.getItem(
+      quoteStorageKey(USER_NAME, USER_COMPANY)
+    );
+
+    const libKey = `sp:pdfLib:${slug(USER_NAME)}:${slug(USER_COMPANY)}`;
+    const hasPDFs = JSON.parse(localStorage.getItem(libKey) || "[]").length > 0;
+
+    return hasThread || hasState || hasLastQuote || hasPDFs;
+  } catch {
+    return false;
+  }
+}
 
 /* ================== Listeners ================== */
 sendBtn?.addEventListener("click", () => sendMessage());
@@ -1331,10 +1351,17 @@ logoutBtn?.addEventListener("click", () => {
 
 /* ================== Reiniciar conversación ================== */
 document.getElementById("new-quote")?.addEventListener("click", () => {
-  resetConversationState();
-  const url = new URL(location.href);
-  url.searchParams.set("new", "1");
-  location.replace(url.pathname + url.search);
+  const showHint = hasAnyHistoryForUser(); // ← solo si ya hubo algo antes
+  resetConversationState(); // limpia TODO
+
+  if (showHint) {
+    addMessage(
+      AGENT_NAME,
+      "🙌 ¡Listo! Empezamos una nueva cotización. Escribe **Iniciar cotización** o dime el nombre del negocio y su actividad."
+    );
+    // si prefieres la original, cambia el texto anterior por:
+    // "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización"
+  }
 });
 
 /* ================== Polling ================== */
