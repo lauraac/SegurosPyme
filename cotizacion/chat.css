@@ -55,13 +55,15 @@ body {
   color: var(--ink);
 }
 
+/* No permitas que #messages haga crecer el card */
+#messages,
 .messages {
-  max-height: 300px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
+  flex: 0 0 auto; /* ← en lugar de 1 1 auto */
+  min-height: 160px;
+  max-height: 320px; /* tope; cámbialo a tu gusto, p.ej. 40vh */
+  overflow-y: auto; /* muestra scroll cuando se llene */
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 /* Tus mensajes estaban con .text-white; los pintamos oscuro dentro del card */
