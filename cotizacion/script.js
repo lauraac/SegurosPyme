@@ -256,10 +256,6 @@ const SHOULD_RESET = getParam("new") === "1" || getParam("reset") === "1";
 window.addEventListener("DOMContentLoaded", () => {
   if (SHOULD_RESET) {
     resetConversationState(); // limpia threadId, history, PYME_STATE, inputs y botón PDF
-    addMessage(
-      "Lia",
-      "🔄 Nueva cotización iniciada. Dime el nombre del negocio y la actividad."
-    );
   }
 });
 
