@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const href = new URL(newQuoteLink.getAttribute("href"), location.href);
     if (name) href.searchParams.set("name", name);
     if (company) href.searchParams.set("company", company);
+    href.searchParams.set("new", "1"); // ← fuerza reset al abrir
     newQuoteLink.setAttribute("href", href.pathname + href.search);
   }
 

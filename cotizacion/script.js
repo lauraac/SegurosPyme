@@ -251,6 +251,18 @@ const qName = getParam("name");
 const qCompany = getParam("company");
 const USER_NAME = qName ?? localStorage.getItem("userName");
 const USER_COMPANY = qCompany ?? localStorage.getItem("userCompany");
+const SHOULD_RESET = getParam("new") === "1" || getParam("reset") === "1";
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (SHOULD_RESET) {
+    resetConversationState(); // limpia threadId, history, PYME_STATE, inputs y botón PDF
+    addMessage(
+      "Lia",
+      "🔄 Nueva cotización iniciada. Dime el nombre del negocio y la actividad."
+    );
+  }
+});
+
 if (!USER_NAME || !USER_COMPANY) {
   window.location.href = "../index.html";
   throw new Error("Sin sesión");
@@ -697,7 +709,10 @@ async function sendMessage() {
     input.value = "";
     input.focus();
 
-    await sendMessageInternal(userMessage, true);
+    const hasContext = !!(
+      PYME_STATE.negocioNombre || PYME_STATE.actividadPrincipal
+    );
+    await sendMessageInternal(userMessage, hasContext);
   } finally {
     IS_SENDING = false; // 🔓 libera el envío
   }
@@ -705,6 +720,9 @@ async function sendMessage() {
 
 /* ================== Enviar al backend ================== */
 async function sendMessageInternal(userMessage, withContext = false) {
+  if (!THREAD_ID && getHistory().length === 0) {
+    withContext = false; // chat realmente nuevo
+  }
   try {
     const payloadMsg = withContext
       ? buildShortContext() + userMessage
@@ -1314,10 +1332,9 @@ logoutBtn?.addEventListener("click", () => {
 /* ================== Reiniciar conversación ================== */
 document.getElementById("new-quote")?.addEventListener("click", () => {
   resetConversationState();
-  addMessage(
-    "Lia",
-    "🔄 Nueva cotización iniciada. Escribe: Iniciar cotización"
-  );
+  const url = new URL(location.href);
+  url.searchParams.set("new", "1");
+  location.replace(url.pathname + url.search);
 });
 
 /* ================== Polling ================== */
